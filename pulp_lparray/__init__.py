@@ -1,3 +1,3 @@
-from .lparray import lparray
+from .lparray import lparray, number
 
-__all__ = ["lparray"]
+__all__ = ["lparray", "number"]
