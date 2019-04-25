@@ -9,18 +9,9 @@ import numpy as np
 import pulp as pp
 from typing_extensions import Literal
 
-SOLDIR = Path("./solutions/")
-
 
 def number(it: ty.Iterable) -> ty.List[int]:
     return list(ix for ix, _ in enumerate(it))
-
-
-def numprod(
-    *its: ty.Iterable
-) -> ty.Generator[ty.Tuple[ty.Any, ...], None, None]:
-
-    yield from product(*map(number, its))
 
 
 class lparray(np.ndarray):
