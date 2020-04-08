@@ -48,6 +48,27 @@ def impose_flow_thinning(limit, dist, Dists: lparray):
     ).constrain(prob, f"FlowThin{dist}")
 ```
 
+### Finding an optimal stock allocation
+
+From the wild: we want an integral portfolio allocation that mostly closely matches a fractional target.
+We could use a rounding heuristic to approximate this, but PuLP-LPARRAY lets us do the correct thing easily.
+
+```
+alloc = lparray.create_anon("Alloc", shape=target.shape, cat=pulp.LpInteger)
+(alloc >= 0).constrain(prob, "NonNegativePositions")
+
+cost = (alloc @ price_arr).sum()
+(cost <= funds).constrain(prob, "DoNotExceedFunds")
+
+loss = (
+    # rescale by inverse composition to punish relative deviations equally
+    ((alloc - target_alloc) * (1 / target))
+    .abs(prob, "Loss", bigM=1_000_000)
+    .sumit()
+)
+prob += loss
+```
+
 ## Features
 
 It's just PuLP under the hood: `LpVariable`, `LpAffineExpression` and
