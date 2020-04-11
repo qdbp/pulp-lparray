@@ -9,6 +9,7 @@ from typing import (
     Any,
     Collection,
     Optional,
+    Literal,
 )
 
 import numpy as np
@@ -21,7 +22,6 @@ from pulp import (
     value,
     LpConstraint,
 )
-from typing_extensions import Literal
 
 LpComparable = Union["lparray", LpVariable, int, float]
 LpVarType = Literal["Binary", "Integer", "Continuous"]
