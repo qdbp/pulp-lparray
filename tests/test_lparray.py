@@ -5,13 +5,13 @@ import pulp as pp
 from pulp_lparray import lparray
 
 
-def test_super_sudoku():
+def test_super_sudoku() -> None:
     """
     A Supersudoku board is a Sudoku board with the additional requirement that
     no single digit can be found at the same coordinates in two boxes.
     """
 
-    def check_super_sudoku(arr):
+    def check_super_sudoku(arr: np.ndarray) -> bool:
         alldigits = frozenset([1, 2, 3, 4, 5, 6, 7, 8, 9])
         flat = arr.argmax(axis=-1) + 1
 
@@ -30,7 +30,7 @@ def test_super_sudoku():
         return True
 
     #                       name      R, C, r, c, n   lb ub type
-    X = lparray.create_anon("Board", (3, 3, 3, 3, 9), 0, 1, pp.LpBinary)
+    X = lparray.create_anon("Board", (3, 3, 3, 3, 9), cat=pp.LpBinary)
     prob = pp.LpProblem("SuperSudoku", pp.LpMinimize)
     (X.sum(axis=-1) == 1).constrain(prob, "OneDigitPerCell")
     (X.sum(axis=(1, 3)) == 1).constrain(prob, "MaxOnePerRow")
@@ -44,10 +44,10 @@ def test_super_sudoku():
     assert check_super_sudoku(X.values)
 
 
-def test_logical_clip():
+def test_logical_clip() -> None:
 
     prob = pp.LpProblem("logical_clip", pp.LpMinimize)
-    X = lparray.create_anon("arr", (5, 5), 0, 5, pp.LpInteger)
+    X = lparray.create_anon("arr", (5, 5), cat=pp.LpInteger, lowBound=0, upBound=5)
     (X.sum(axis=1) >= 6).constrain(prob, "colsum")
     (X.sum(axis=0) >= 6).constrain(prob, "rowsum")
 
@@ -64,13 +64,13 @@ def test_logical_clip():
     assert lclip.values.max() >= 0
 
 
-def test_int_max():
+def test_int_max() -> None:
     """
     "The Rook Problem", with maxes.
     """
 
     prob = pp.LpProblem("int_max", pp.LpMaximize)
-    X = lparray.create_anon("arr", (8, 8), 0, 1, pp.LpBinary)
+    X = lparray.create_anon("arr", (8, 8), cat=pp.LpBinary)
     (X.sum(axis=1) == 1).constrain(prob, "colsum")
     (X.sum(axis=0) == 1).constrain(prob, "rowsum")
 
@@ -83,12 +83,12 @@ def test_int_max():
     assert prob.objective == 16
 
 
-def test_abs():
+def test_abs() -> None:
 
     N = 20
 
     prob = pp.LpProblem("wavechaser", pp.LpMaximize)
-    X = lparray.create_anon("arr", (N,), -1, 1, pp.LpInteger)
+    X = lparray.create_anon("arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1)
     wave = 2 * npr.binomial(1, 0.5, size=(N,)) - 1
 
     xp, xm = X.abs_decompose(prob, "abs")
