@@ -1,6 +1,7 @@
 import numpy as np
 import numpy.random as npr
 import pulp as pp
+from pulp import LpBinary, LpMaximize
 
 from pulp_lparray import lparray
 
@@ -12,20 +13,20 @@ def test_super_sudoku() -> None:
     """
 
     def check_super_sudoku(arr: np.ndarray) -> bool:
-        alldigits = frozenset([1, 2, 3, 4, 5, 6, 7, 8, 9])
+        all_digits = frozenset([1, 2, 3, 4, 5, 6, 7, 8, 9])
         flat = arr.argmax(axis=-1) + 1
 
         for col in range(9):
-            assert set(flat[:, col // 3, :, col % 3].ravel()) == alldigits
+            assert set(flat[:, col // 3, :, col % 3].ravel()) == all_digits
 
         for row in range(9):
-            assert set(flat[row // 3, :, row % 3, :].ravel()) == alldigits
+            assert set(flat[row // 3, :, row % 3, :].ravel()) == all_digits
 
         for box in range(9):
-            assert set(flat[box // 3, box % 3, :, :].ravel()) == alldigits
+            assert set(flat[box // 3, box % 3, :, :].ravel()) == all_digits
 
         for xy in range(9):
-            assert set(flat[:, :, xy // 3, xy % 3].ravel()) == alldigits
+            assert set(flat[:, :, xy // 3, xy % 3].ravel()) == all_digits
 
         return True
 
@@ -44,10 +45,13 @@ def test_super_sudoku() -> None:
     assert check_super_sudoku(X.values)
 
 
+# noinspection PyArgumentList
 def test_logical_clip() -> None:
 
     prob = pp.LpProblem("logical_clip", pp.LpMinimize)
-    X = lparray.create_anon("arr", (5, 5), cat=pp.LpInteger, lowBound=0, upBound=5)
+    X = lparray.create_anon(
+        "arr", (5, 5), cat=pp.LpInteger, lowBound=0, upBound=5
+    )
     (X.sum(axis=1) >= 6).constrain(prob, "colsum")
     (X.sum(axis=0) >= 6).constrain(prob, "rowsum")
 
@@ -88,7 +92,9 @@ def test_abs() -> None:
     N = 20
 
     prob = pp.LpProblem("wavechaser", pp.LpMaximize)
-    X = lparray.create_anon("arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1)
+    X = lparray.create_anon(
+        "arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1
+    )
     wave = 2 * npr.binomial(1, 0.5, size=(N,)) - 1
 
     xp, xm = X.abs_decompose(prob, "abs")
@@ -106,3 +112,69 @@ def test_abs() -> None:
 
     assert np.all(xp.values * wave >= 0)
     assert np.all(-xm.values * wave >= 0)
+
+
+def test_logical_clip_again_because_i_forgot_i_already_had_a_test() -> None:
+    """
+    Binary knapsack problem, implemented inefficiently.
+    """
+
+    boxes_values = np.array([20, 10, 5, 1, 0])
+    box_sizes = np.array([15, 10, 10, 5, 1])
+
+    capacity = 30
+
+    prob = pp.LpProblem(sense=pp.LpMaximize)
+
+    taken = lparray.create_like("is_taken_base", box_sizes, cat=pp.LpInteger)
+    clipped = taken.logical_clip(prob, "is_taken")
+
+    (box_sizes @ clipped <= capacity).constrain(prob, "MaxCapacity")
+    prob += (clipped * boxes_values).sumit()
+    prob.solve()
+
+    assert np.allclose(clipped.values, [1, 1, 0, 1, 0])
+
+
+def test_bin_and():
+
+    scylla = np.array([1, 0, 0])
+    charibdis = np.array([0, 0, 1])
+    strong_currents = np.array([5, 1, 5])
+
+    prob = pp.LpProblem(sense=LpMaximize)
+
+    selected = lparray.create(
+        "navigation", (("left", "center", "right"),), cat=LpBinary
+    )
+    # no sum constraint, only constraint will be the and
+
+    value = selected @ strong_currents
+    prob += value.item()
+
+    selected.lp_bin_and(prob, "DontHitRocks", 1 - scylla, 1 - charibdis)
+
+    prob.solve()
+    assert np.allclose(selected.values, [0, 1, 0])
+
+
+def test_bin_or():
+
+    misery = np.array([1, 0, 0])
+    company = np.array([0, 0, 1])
+
+    day = lparray.create(
+        "GoToBank",
+        (("stuck in traffic", "stay_home", "they're closed"),),
+        cat=LpBinary,
+    )
+
+    utility = np.array([-5, 0, -5])
+
+    prob = pp.LpProblem(sense=LpMaximize)
+    prob += (utility @ day).item()
+
+    day.lp_bin_or(prob, "DontCheckHours", misery, company)
+    prob.solve()
+
+    assert prob.objective.value() == -10

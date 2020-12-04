@@ -1,3 +1,3 @@
-from .lparray import lparray, number
+from .lparray import count_out, lparray
 
-__all__ = ["lparray", "number"]
+__all__ = ["lparray", "count_out"]
