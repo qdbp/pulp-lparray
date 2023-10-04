@@ -154,7 +154,7 @@ class lparray(
                     )
 
         arr = np.zeros(
-            tuple(len(ixset) for ixset in index_sets), dtype=np.object
+            tuple(len(ixset) for ixset in index_sets), dtype=object
         )
         recursive_worker(name, arr, index_sets)
 
