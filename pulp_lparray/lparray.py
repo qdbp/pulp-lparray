@@ -277,9 +277,9 @@ class lparray(
         **kwargs: Any,
     ) -> tuple[lparray[LpVariable], lparray[LpVariable]]:
         """
-        Generates two arrays, xp and xm, that sum to |self|, with the following
+        Generates two arrays, xp and xm, that difference to self, with the following
         properties:
-
+            xp - xm == self
             xp >= 0
             xm >= 0
             xp == 0 XOR xm == 0
