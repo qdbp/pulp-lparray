@@ -12,17 +12,18 @@ Let's solve an unconstrained SuperSudoku puzzle. A SuperSudoku is a Sudoku
 with the additional requirement that all digits having box coordinates (x, y)
 be distinct for all (x, y).
 
-```import pulp as pp
-from lparray import lparray
+```
+import pulp as pp
+from pulp_lparray import lparray
 
 #                       name      R, C, r, c, n   lb ub type
-X = lparray.create_anon("Board", (3, 3, 3, 3, 9), 0, 1, pp.LpBinary)
+X = lparray.create_anon("Board", (3, 3, 3, 3, 9), cat=pp.LpBinary)
 prob = pp.LpProblem("SuperSudoku", pp.LpMinimize)
 (X.sum(axis=-1) == 1).constrain(prob, "OneDigitPerCell")
 (X.sum(axis=(1, 3)) == 1).constrain(prob, "MaxOnePerRow")
 (X.sum(axis=(0, 2)) == 1).constrain(prob, "MaxOnePerCol")
 (X.sum(axis=(2, 3)) == 1).constrain(prob, "MaxOnePerBox")
-(X.sum(axis=(0, 1)) == 1).constrain(prob, "MaxOnePerXY")
+(X.sum(axis=(0, 1)) == 1).constrain(prob, "MaxOnePerDust")
 prob.solve()
 board = X.values.argmax(axis=-1)
 print(board)

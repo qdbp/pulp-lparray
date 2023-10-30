@@ -1,7 +1,9 @@
 import numpy as np
 import numpy.random as npr
 import pulp as pp
+import pytest
 from pulp import LpBinary, LpMaximize
+from numpy.testing import assert_allclose
 
 from pulp_lparray import lparray
 
@@ -43,6 +45,34 @@ def test_super_sudoku() -> None:
     print(board)
 
     assert check_super_sudoku(X.values)
+
+
+def test_elastically_constrain() -> None:
+    prob = pp.LpProblem("elastically_constrain", pp.LpMinimize)
+    x = lparray.create_anon(
+        "arr", shape=(5,), cat=pp.LpInteger, lowBound=0, upBound=5
+    )
+    target_vals = np.array([1, 2.1, 3, 4, 5])
+    prob += x.sumit()
+    constraints = (x == target_vals)
+    # add 2 to the objective for each 1 away from the constraint
+    constraints.elastically_constrain(
+        prob,
+        "elast",
+        (0.0, 0.0),
+        2
+    )
+    prob.solve()
+    assert_allclose(x.values, np.array([1, 2, 3, 4, 5]))
+    # Sum of X is 15, = 0.2 from the soft constraint.
+    assert prob.objective.value() == 15.2
+
+
+@pytest.mark.skip(msg='TODO create fuller example')
+def test_soft_constrained_knapsack() -> None:
+    """
+    """
+    assert False
 
 
 # noinspection PyArgumentList
@@ -178,3 +208,7 @@ def test_bin_or():
     prob.solve()
 
     assert prob.objective.value() == -10
+
+
+if __name__ == '__main__':
+    test_elastically_constrain()
