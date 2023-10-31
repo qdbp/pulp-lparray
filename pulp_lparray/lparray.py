@@ -11,7 +11,9 @@ from typing import (
     Protocol,
     TypeVar,
     Union,
+    Tuple
 )
+from functools import partial
 
 import numpy as np  # type: ignore
 from numpy import ndarray
@@ -154,7 +156,7 @@ class lparray(
                     )
 
         arr = np.zeros(
-            tuple(len(ixset) for ixset in index_sets), dtype=np.object
+            tuple(len(ixset) for ixset in index_sets), dtype=object
         )
         recursive_worker(name, arr, index_sets)
 
@@ -223,6 +225,22 @@ class lparray(
 
         return np.vectorize(value)(self).view(np.ndarray)
 
+    @staticmethod
+    def _check_is_constraint(const):
+        if not isinstance(const, LpConstraint):
+            raise TypeError(
+                "Attempting to constrain problem with "
+                f"non-constraint {const}"
+            )
+
+    def _check_is_eq_constraint(self, const):
+        self._check_is_constraint(const)
+        if const.sense != 0:
+            raise TypeError(
+                "Requires an equality constraint (sense=0) "
+                f"sense: {const.sense}"
+            )            
+
     def constrain(self, prob: LpProblem, name: str) -> None:
         """
         Applies the constraints contained in self to the problem.
@@ -268,6 +286,78 @@ class lparray(
 
         recursive_worker(prob, self, name)
 
+    @staticmethod
+    def _convert_to_elastic_subproblem(constraint, proportionFreeBoundList, penalty):
+        elastic_constraint = constraint.makeElasticSubProblem(
+            proportionFreeBoundList=proportionFreeBoundList,
+            penalty=penalty
+        )
+        return elastic_constraint
+
+    def elastically_constrain(
+            self,
+            prob: LpProblem,
+            name: str,
+            proportion_unpenalised_bounds: Tuple[float, float],
+            penalty: float
+    ) -> None:
+        """
+        Applies the constraints contained in self to the problem
+        as elastic constraints. Which are sub problems added to 
+        the objective where an additional symetric penalty term
+        for distance from the constraint target. 
+
+        Preconditions:
+            all entries of self are `LpConstraints` with sense LpConstraintEQ (0).
+            Main objectives are already added to the problem (using +=)
+
+        Arguments:
+            prob: `LpProblem` which to apply constraints to.
+            name: base name to use for the applied constraints.
+            proportion_unpenalised_bounds: proportional distance either 
+                side of the equality constraint within which there 
+                is no penalty.
+            penalty
+
+        Usage:
+            (array_of_lp_vars == array_of_numbers).elasticly_constrain(
+                problem, "SomeElasticConstraint")
+        """
+        elastify = partial(
+            self._convert_to_elastic_subproblem,
+            proportionFreeBoundList=list(proportion_unpenalised_bounds),
+            penalty=penalty
+        )
+
+        if self.ndim == 0:
+            constraint = self.item()
+            # ignore
+            self._check_is_eq_constraint(constraint)
+            constraint.name = name
+            prob.extend(elastify(constraint))
+            return
+
+        if name and self.ndim == 1:
+            name += "("
+
+        def recursive_worker(
+            r_prob: LpProblem, plane: np.ndarray, r_name: str
+        ) -> None:
+            if plane.ndim == 1:
+                close_paren = r_name and (")" if "(" in r_name else "")
+                for cx, constraint in enumerate(plane):
+                    self._check_is_eq_constraint(constraint)
+                    constraint.name = r_name and f"{r_name}{cx}{close_paren}"
+                    r_prob.extend(elastify(constraint))
+            else:
+                open_paren = r_name and ("(" if "(" not in r_name else "")
+                for px, subplane in enumerate(plane):
+                    subname = r_name and f"{r_name}{open_paren}{px},"
+                    recursive_worker(r_prob, subplane, subname)
+
+        recursive_worker(prob, self, name)
+
+
     def abs_decompose(
         self: lparray[LPV],
         prob: LpProblem,
@@ -277,9 +367,9 @@ class lparray(
         **kwargs: Any,
     ) -> tuple[lparray[LpVariable], lparray[LpVariable]]:
         """
-        Generates two arrays, xp and xm, that sum to |self|, with the following
+        Generates two arrays, xp and xm, that difference to self, with the following
         properties:
-
+            xp - xm == self
             xp >= 0
             xm >= 0
             xp == 0 XOR xm == 0

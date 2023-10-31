@@ -1,7 +1,9 @@
 import numpy as np
 import numpy.random as npr
 import pulp as pp
+import pytest
 from pulp import LpBinary, LpMaximize
+from numpy.testing import assert_allclose
 
 from pulp_lparray import lparray
 
@@ -37,12 +39,33 @@ def test_super_sudoku() -> None:
     (X.sum(axis=(1, 3)) == 1).constrain(prob, "MaxOnePerRow")
     (X.sum(axis=(0, 2)) == 1).constrain(prob, "MaxOnePerCol")
     (X.sum(axis=(2, 3)) == 1).constrain(prob, "MaxOnePerBox")
-    (X.sum(axis=(0, 1)) == 1).constrain(prob, "MaxOnePerDust")
+    (X.sum(axis=(0, 1)) == 1).constrain(prob, "MaxOnePerXY")
     prob.solve()
     board = X.values.argmax(axis=-1)
     print(board)
 
     assert check_super_sudoku(X.values)
+
+
+def test_elastically_constrain() -> None:
+    prob = pp.LpProblem("elastically_constrain", pp.LpMinimize)
+    x = lparray.create_anon(
+        "arr", shape=(5,), cat=pp.LpInteger, lowBound=0, upBound=5
+    )
+    target_vals = np.array([1, 2.1, 3, 4, 5])
+    prob += x.sumit()
+    constraints = (x == target_vals)
+    # add 2 to the objective for each 1 away from the constraint
+    constraints.elastically_constrain(
+        prob,
+        "elast",
+        (0.0, 0.0),
+        2
+    )
+    prob.solve()
+    assert_allclose(x.values, np.array([1, 2, 3, 4, 5]))
+    # Sum of X is 15, = 0.2 from the soft constraint.
+    assert prob.objective.value() == 15.2
 
 
 # noinspection PyArgumentList
