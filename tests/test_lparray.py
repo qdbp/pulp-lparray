@@ -39,7 +39,7 @@ def test_super_sudoku() -> None:
     (X.sum(axis=(1, 3)) == 1).constrain(prob, "MaxOnePerRow")
     (X.sum(axis=(0, 2)) == 1).constrain(prob, "MaxOnePerCol")
     (X.sum(axis=(2, 3)) == 1).constrain(prob, "MaxOnePerBox")
-    (X.sum(axis=(0, 1)) == 1).constrain(prob, "MaxOnePerDust")
+    (X.sum(axis=(0, 1)) == 1).constrain(prob, "MaxOnePerXY")
     prob.solve()
     board = X.values.argmax(axis=-1)
     print(board)
@@ -66,13 +66,6 @@ def test_elastically_constrain() -> None:
     assert_allclose(x.values, np.array([1, 2, 3, 4, 5]))
     # Sum of X is 15, = 0.2 from the soft constraint.
     assert prob.objective.value() == 15.2
-
-
-@pytest.mark.skip(msg='TODO create fuller example')
-def test_soft_constrained_knapsack() -> None:
-    """
-    """
-    assert False
 
 
 # noinspection PyArgumentList
@@ -208,7 +201,3 @@ def test_bin_or():
     prob.solve()
 
     assert prob.objective.value() == -10
-
-
-if __name__ == '__main__':
-    test_elastically_constrain()
