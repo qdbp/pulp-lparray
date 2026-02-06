@@ -41,7 +41,6 @@ ignore = [
   "COM",    # trailing commas (formatter handles)
   "EM",     # exception message micro-style
   "FIX",    # no TODO police
-  "INP",    # no namespace-package policing
   "N",      # allow pulp-ish naming (X, N, etc)
   "PLR0913",# keep high-arity internal helpers
   "PLR2004",# magic numbers are fine
