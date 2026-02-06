@@ -425,10 +425,7 @@ class lparray(
         **kwargs: Kwargs,
     ) -> lparray[LpVariable]:
 
-        if lb == 0 and ub == 1:
-            cat = LpBinary
-        else:
-            cat = LpInteger
+        cat = LpBinary if lb == 0 and ub == 1 else LpInteger
 
         return self._lp_minmax(prob, name, which=which, cat=cat, lb=lb, ub=ub, **kwargs)
 

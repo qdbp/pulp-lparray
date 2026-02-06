@@ -48,7 +48,6 @@ ignore = [
   "PLR2004",# magic numbers are fine
   "PLW1641",# numpy subclass hash semantics are intentional
   "S",      # asserts in tests / internal sentinels
-  "SIM",    # stylistic simplifications
   "TD",     # todo format policing
   "TC",     # type-checking blocks
   "W605",   # invalid escape sequences (docs)
