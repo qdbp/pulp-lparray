@@ -44,7 +44,6 @@ ignore = [
   "INP",    # no namespace-package policing
   "N",      # allow pulp-ish naming (X, N, etc)
   "NPY",    # allow old numpy.random API
-  "PGH",    # allow blanket `type: ignore`
   "PLR",    # complexity/nargs/etc. policing
   "PLR2004",# magic numbers are fine
   "PLW1641",# numpy subclass hash semantics are intentional
