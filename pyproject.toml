@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pulp-lparray"
+version = "1.0.20201204002401"
+description = "PuLP x NumPy"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy",
+  "PuLP",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "ruff",
+  "ty",
+]
+
+[tool.pytest.ini_options]
+addopts = "--durations=0 -vx tests/"
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]
+
+[tool.hatch.build]
+include = ["pulp_lparray"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D",      # docstrings (intentionally not enforced)
+  "TRY",    # try/except micro-style (intentionally not enforced)
+  "COM",    # trailing commas (formatter handles)
+  "EM",     # exception message micro-style
+  "N",      # allow pulp-ish naming (X, N, etc)
+  "PLR0913",# keep high-arity internal helpers
+  "PLR2004",# magic numbers are fine
+  "PLW1641",# numpy subclass hash semantics are intentional
+  "S",      # asserts in tests / internal sentinels
+  "TC",     # type-checking blocks
+  "RUF022", # __all__ ordering
+]
+
+[tool.ruff.format]
+quote-style = "preserve"

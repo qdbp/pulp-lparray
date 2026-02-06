@@ -39,8 +39,6 @@ def test_super_sudoku() -> None:
     (X.sum(axis=(2, 3)) == 1).constrain(prob, "MaxOnePerBox")
     (X.sum(axis=(0, 1)) == 1).constrain(prob, "MaxOnePerDust")
     prob.solve()
-    board = X.values.argmax(axis=-1)
-    print(board)
 
     assert check_super_sudoku(X.values)
 
@@ -49,16 +47,14 @@ def test_super_sudoku() -> None:
 def test_logical_clip() -> None:
 
     prob = pp.LpProblem("logical_clip", pp.LpMinimize)
-    X = lparray.create_anon(
-        "arr", (5, 5), cat=pp.LpInteger, lowBound=0, upBound=5
-    )
+    X = lparray.create_anon("arr", (5, 5), cat=pp.LpInteger, lowBound=0, upBound=5)
     (X.sum(axis=1) >= 6).constrain(prob, "colsum")
     (X.sum(axis=0) >= 6).constrain(prob, "rowsum")
 
     lclip = X.logical_clip(prob, "lclip")
 
     # dodging these
-    bern = npr.binomial(3, 0.5, size=(5, 5))
+    bern = npr.default_rng().binomial(3, 0.5, size=(5, 5))
 
     prob += (X * bern).sumit()
     prob.solve()
@@ -92,20 +88,14 @@ def test_abs() -> None:
     N = 20
 
     prob = pp.LpProblem("wavechaser", pp.LpMaximize)
-    X = lparray.create_anon(
-        "arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1
-    )
-    wave = 2 * npr.binomial(1, 0.5, size=(N,)) - 1
+    X = lparray.create_anon("arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1)
+    wave = 2 * npr.default_rng().binomial(1, 0.5, size=(N,)) - 1
 
     xp, xm = X.abs_decompose(prob, "abs")
     xabs = xp + xm
 
     prob += (wave * X).sumit()
     prob.solve()
-
-    print(wave)
-    print(xp.values)
-    print(xm.values)
 
     assert prob.objective == N
     assert xabs.values.sum() == N
@@ -136,7 +126,7 @@ def test_logical_clip_again_because_i_forgot_i_already_had_a_test() -> None:
     assert np.allclose(clipped.values, [1, 1, 0, 1, 0])
 
 
-def test_bin_and():
+def test_bin_and() -> None:
 
     scylla = np.array([1, 0, 0])
     charibdis = np.array([0, 0, 1])
@@ -144,9 +134,7 @@ def test_bin_and():
 
     prob = pp.LpProblem(sense=LpMaximize)
 
-    selected = lparray.create(
-        "navigation", (("left", "center", "right"),), cat=LpBinary
-    )
+    selected = lparray.create("navigation", (("left", "center", "right"),), cat=LpBinary)
     # no sum constraint, only constraint will be the and
 
     value = selected @ strong_currents
@@ -158,7 +146,7 @@ def test_bin_and():
     assert np.allclose(selected.values, [0, 1, 0])
 
 
-def test_bin_or():
+def test_bin_or() -> None:
 
     misery = np.array([1, 0, 0])
     company = np.array([0, 0, 1])
