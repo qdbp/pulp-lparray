@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pulp-lparray"
+version = "1.0.20201204002401"
+description = "PuLP x NumPy"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy",
+  "PuLP",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "ruff",
+  "ty",
+]
+
+[tool.pytest.ini_options]
+addopts = "--durations=0 -vx tests/"
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]
+
+[tool.hatch.build]
+include = ["pulp_lparray"]
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "D",      # docstrings (intentionally not enforced)
+  "TRY",    # try/except micro-style (intentionally not enforced)
+  "ANN",    # project isn't fully annotated
+  "COM",    # trailing commas (formatter handles)
+  "EM",     # exception message micro-style
+  "FIX",    # no TODO police
+  "INP",    # no namespace-package policing
+  "N",      # allow pulp-ish naming (X, N, etc)
+  "NPY",    # allow old numpy.random API
+  "PGH",    # allow blanket `type: ignore`
+  "PLR",    # complexity/nargs/etc. policing
+  "PLR2004",# magic numbers are fine
+  "PLW1641",# numpy subclass hash semantics are intentional
+  "S",      # asserts in tests / etc.
+  "SIM",    # stylistic simplifications
+  "TD",     # todo format policing
+  "T20",    # prints in tests
+  "UP",     # allow legacy typing style
+  "W605",   # invalid escape sequences (docs)
+  "PT015",  # asserts used as sentinels
+  "RUF022", # __all__ ordering
+]
+
+[tool.ruff.format]
+quote-style = "preserve"

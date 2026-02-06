@@ -49,9 +49,7 @@ def test_super_sudoku() -> None:
 def test_logical_clip() -> None:
 
     prob = pp.LpProblem("logical_clip", pp.LpMinimize)
-    X = lparray.create_anon(
-        "arr", (5, 5), cat=pp.LpInteger, lowBound=0, upBound=5
-    )
+    X = lparray.create_anon("arr", (5, 5), cat=pp.LpInteger, lowBound=0, upBound=5)
     (X.sum(axis=1) >= 6).constrain(prob, "colsum")
     (X.sum(axis=0) >= 6).constrain(prob, "rowsum")
 
@@ -92,9 +90,7 @@ def test_abs() -> None:
     N = 20
 
     prob = pp.LpProblem("wavechaser", pp.LpMaximize)
-    X = lparray.create_anon(
-        "arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1
-    )
+    X = lparray.create_anon("arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1)
     wave = 2 * npr.binomial(1, 0.5, size=(N,)) - 1
 
     xp, xm = X.abs_decompose(prob, "abs")
@@ -144,9 +140,7 @@ def test_bin_and():
 
     prob = pp.LpProblem(sense=LpMaximize)
 
-    selected = lparray.create(
-        "navigation", (("left", "center", "right"),), cat=LpBinary
-    )
+    selected = lparray.create("navigation", (("left", "center", "right"),), cat=LpBinary)
     # no sum constraint, only constraint will be the and
 
     value = selected @ strong_currents
