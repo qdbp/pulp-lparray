@@ -1,17 +1,7 @@
 from __future__ import annotations
 
-from typing import (
-    Any,
-    Collection,
-    Generic,
-    Iterable,
-    Literal,
-    NoReturn,
-    Optional,
-    Protocol,
-    TypeVar,
-    Union,
-)
+from collections.abc import Collection, Iterable
+from typing import Any, Generic, Literal, NoReturn, Protocol, TypeVar, Union
 
 import numpy as np
 from numpy import ndarray
@@ -90,8 +80,8 @@ class lparray(
         name: str,
         index_sets: tuple[Collection[Any], ...],
         *,
-        lowBound: Optional[Number] = None,
-        upBound: Optional[Number] = None,
+        lowBound: Number | None = None,
+        upBound: Number | None = None,
         cat: LpVarType = "Continuous",
     ) -> lparray[LpVariable]:
         """
@@ -339,10 +329,10 @@ class lparray(
         which: Literal["min", "max"],
         cat: LpVarType,
         *,
-        lb: Optional[Number] = None,
-        ub: Optional[Number] = None,
+        lb: Number | None = None,
+        ub: Number | None = None,
         bigM: Number = 1000,
-        axis: Union[None, int, tuple[int, ...]] = None,
+        axis: int | tuple[int, ...] | None = None,
     ) -> lparray[LpVariable]:
         """
         Returns an lparray the min/max of the given lparray along an axis.
@@ -508,7 +498,7 @@ class lparray(
         self: lparray[LPV],
         prob: LpProblem,
         name: str,
-        *ins: Union[lparray[LpVariable], lparray[LpAffineExpression], ndarray],
+        *ins: lparray[LpVariable] | lparray[LpAffineExpression] | ndarray,
     ) -> lparray[LPV]:
         """
         Constrains the array to be the logical AND of a number of binary
@@ -527,7 +517,7 @@ class lparray(
         self: lparray[LPV],
         prob: LpProblem,
         name: str,
-        *ins: Union[lparray[LpVariable], lparray[LpAffineExpression], ndarray],
+        *ins: lparray[LpVariable] | lparray[LpAffineExpression] | ndarray,
     ) -> lparray[LPV]:
         """
         Constrains the array to be the logical OR of a number of binary inputs.
