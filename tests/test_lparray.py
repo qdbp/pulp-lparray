@@ -39,8 +39,6 @@ def test_super_sudoku() -> None:
     (X.sum(axis=(2, 3)) == 1).constrain(prob, "MaxOnePerBox")
     (X.sum(axis=(0, 1)) == 1).constrain(prob, "MaxOnePerDust")
     prob.solve()
-    board = X.values.argmax(axis=-1)
-    print(board)
 
     assert check_super_sudoku(X.values)
 
@@ -98,10 +96,6 @@ def test_abs() -> None:
 
     prob += (wave * X).sumit()
     prob.solve()
-
-    print(wave)
-    print(xp.values)
-    print(xm.values)
 
     assert prob.objective == N
     assert xabs.values.sum() == N

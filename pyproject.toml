@@ -50,7 +50,6 @@ ignore = [
   "S",      # asserts in tests / internal sentinels
   "SIM",    # stylistic simplifications
   "TD",     # todo format policing
-  "T20",    # prints in tests
   "TC",     # type-checking blocks
   "W605",   # invalid escape sequences (docs)
   "PT015",  # asserts used as sentinels
