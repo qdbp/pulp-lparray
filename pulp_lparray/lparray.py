@@ -302,6 +302,26 @@ class lparray(
         xp, xm = self.abs_decompose(prob, name, **kwargs)
         return xp + xm
 
+    def abs_clip(
+        self,
+        prob: LpProblem,
+        name: str,
+        *,
+        bigM: Number,
+        lowBound: Number | None = None,
+        upBound: Number | None = None,
+        cat: LpVarType = "Continuous",
+    ) -> lparray[LpAffineExpression]:
+        xp, xm = self.abs_decompose(
+            prob,
+            name,
+            bigM=bigM,
+            lowBound=lowBound,
+            upBound=upBound,
+            cat=cat,
+        )
+        return xp + xm
+
     def logical_clip(self, prob: LpProblem, name: str, bigM: Number = 1000) -> lparray[LpVariable]:
         """
         Assumes self is integer >= 0.
