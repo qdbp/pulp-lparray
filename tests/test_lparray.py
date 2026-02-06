@@ -54,7 +54,7 @@ def test_logical_clip() -> None:
     lclip = X.logical_clip(prob, "lclip")
 
     # dodging these
-    bern = npr.binomial(3, 0.5, size=(5, 5))
+    bern = npr.default_rng().binomial(3, 0.5, size=(5, 5))
 
     prob += (X * bern).sumit()
     prob.solve()
@@ -89,7 +89,7 @@ def test_abs() -> None:
 
     prob = pp.LpProblem("wavechaser", pp.LpMaximize)
     X = lparray.create_anon("arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1)
-    wave = 2 * npr.binomial(1, 0.5, size=(N,)) - 1
+    wave = 2 * npr.default_rng().binomial(1, 0.5, size=(N,)) - 1
 
     xp, xm = X.abs_decompose(prob, "abs")
     xabs = xp + xm
