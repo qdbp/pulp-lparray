@@ -40,7 +40,6 @@ ignore = [
   "TRY",    # try/except micro-style (intentionally not enforced)
   "COM",    # trailing commas (formatter handles)
   "EM",     # exception message micro-style
-  "FIX",    # no TODO police
   "N",      # allow pulp-ish naming (X, N, etc)
   "PLR0913",# keep high-arity internal helpers
   "PLR2004",# magic numbers are fine

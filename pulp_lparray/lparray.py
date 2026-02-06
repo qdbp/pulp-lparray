@@ -38,7 +38,6 @@ def count_out(it: Iterable[Any]) -> list[int]:
 # noinspection PyPep8Naming
 class lparray(
     ndarray,
-    # TODO we should also be properly generic over the LpVar category
     Generic[LP],
 ):
     """
