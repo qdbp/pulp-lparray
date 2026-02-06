@@ -338,7 +338,7 @@ class lparray(
         bigM: Number = 1000,
         axis: int | tuple[int, ...] | None = None,
     ) -> lparray[LpVariable]:
-        """
+        r"""
         Returns an lparray the min/max of the given lparray along an axis.
 
         Axis can be multi-dimensional.

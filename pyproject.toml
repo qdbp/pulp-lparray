@@ -46,7 +46,6 @@ ignore = [
   "PLW1641",# numpy subclass hash semantics are intentional
   "S",      # asserts in tests / internal sentinels
   "TC",     # type-checking blocks
-  "W605",   # invalid escape sequences (docs)
   "PT015",  # asserts used as sentinels
   "RUF022", # __all__ ordering
 ]
