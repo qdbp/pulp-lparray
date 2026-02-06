@@ -132,7 +132,7 @@ def test_logical_clip_again_because_i_forgot_i_already_had_a_test() -> None:
     assert np.allclose(clipped.values, [1, 1, 0, 1, 0])
 
 
-def test_bin_and():
+def test_bin_and() -> None:
 
     scylla = np.array([1, 0, 0])
     charibdis = np.array([0, 0, 1])
@@ -152,7 +152,7 @@ def test_bin_and():
     assert np.allclose(selected.values, [0, 1, 0])
 
 
-def test_bin_or():
+def test_bin_or() -> None:
 
     misery = np.array([1, 0, 0])
     company = np.array([0, 0, 1])

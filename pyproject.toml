@@ -38,7 +38,6 @@ select = ["ALL"]
 ignore = [
   "D",      # docstrings (intentionally not enforced)
   "TRY",    # try/except micro-style (intentionally not enforced)
-  "ANN",    # project isn't fully annotated
   "COM",    # trailing commas (formatter handles)
   "EM",     # exception message micro-style
   "FIX",    # no TODO police

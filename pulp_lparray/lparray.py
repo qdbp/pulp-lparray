@@ -28,6 +28,9 @@ class HasShape(Protocol):
     shape: tuple[int, ...]
 
 
+Kwargs = dict[str, Any]
+
+
 def count_out(it: Iterable[Any]) -> list[int]:
     return [ix for ix, _ in enumerate(it)]
 
@@ -143,7 +146,7 @@ class lparray(
         return arr.view(lparray)  # ty: ignore[invalid-return-type]
 
     @classmethod
-    def create_like(cls, name: str, like: HasShape, **kwargs: Any) -> lparray[LpVariable]:
+    def create_like(cls, name: str, like: HasShape, **kwargs: Kwargs) -> lparray[LpVariable]:
         """
         Creates an anonymous lparray with the same shape as a passed array.
 
@@ -157,7 +160,9 @@ class lparray(
         return cls.create_anon(name, like.shape, **kwargs)
 
     @classmethod
-    def create_anon(cls, name: str, shape: tuple[int, ...], **kwargs: Any) -> lparray[LpVariable]:
+    def create_anon(
+        cls, name: str, shape: tuple[int, ...], **kwargs: Kwargs
+    ) -> lparray[LpVariable]:
         """
         Creates an lparray with a given shape and nameless index sets.
 
@@ -247,7 +252,7 @@ class lparray(
         name: str,
         *,
         bigM: Number = 1000.0,
-        **kwargs: Any,
+        **kwargs: Kwargs,
     ) -> tuple[lparray[LpVariable], lparray[LpVariable]]:
         """
         Generates two arrays, xp and xm, that sum to |self|, with the following
@@ -289,7 +294,7 @@ class lparray(
 
         return xp, xm
 
-    def abs(self, prob: LpProblem, name: str, **kwargs: Any) -> lparray[LpAffineExpression]:
+    def abs(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray[LpAffineExpression]:
         """
         Returns variable equal to |self|.
 
@@ -315,7 +320,7 @@ class lparray(
 
         return z
 
-    def sumit(self, *args: Any, **kwargs: Any) -> LpVariable:
+    def sumit(self, *args: object, **kwargs: Kwargs) -> LpVariable:
         """
         Equivalent to `self.sum().item()`
         """
@@ -417,7 +422,7 @@ class lparray(
         which: Literal["min", "max"],
         lb: int,
         ub: int,
-        **kwargs: Any,
+        **kwargs: Kwargs,
     ) -> lparray[LpVariable]:
 
         if lb == 0 and ub == 1:
@@ -428,7 +433,7 @@ class lparray(
         return self._lp_minmax(prob, name, which=which, cat=cat, lb=lb, ub=ub, **kwargs)
 
     def lp_int_max(
-        self, prob: LpProblem, name: str, lb: int, ub: int, **kwargs: Any
+        self, prob: LpProblem, name: str, lb: int, ub: int, **kwargs: Kwargs
     ) -> lparray[LpVariable]:
         """
         Returns an array corresponding to the maximum value of self along axes.
@@ -438,7 +443,7 @@ class lparray(
         return self._lp_int_minmax(prob, name, which="max", lb=lb, ub=ub, **kwargs)
 
     def lp_int_min(
-        self, prob: LpProblem, name: str, lb: int, ub: int, **kwargs: Any
+        self, prob: LpProblem, name: str, lb: int, ub: int, **kwargs: Kwargs
     ) -> lparray[LpVariable]:
         """
         Returns an array corresponding to the maximum value of self along axes.
@@ -450,7 +455,7 @@ class lparray(
         """
         return self._lp_int_minmax(prob, name, which="min", lb=lb, ub=ub, **kwargs)
 
-    def lp_bin_max(self, prob: LpProblem, name: str, **kwargs: Any) -> lparray[LpVariable]:
+    def lp_bin_max(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray[LpVariable]:
         """
         Returns an array corresponding to the maximum value of self along axes.
 
@@ -461,7 +466,7 @@ class lparray(
         """
         return self._lp_int_minmax(prob, name, lb=0, ub=1, which="max", **kwargs)
 
-    def lp_bin_min(self, prob: LpProblem, name: str, **kwargs: Any) -> lparray[LpVariable]:
+    def lp_bin_min(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray[LpVariable]:
         """
         Returns an array corresponding to the minimum value of self along axes.
 
@@ -472,7 +477,7 @@ class lparray(
         """
         return self._lp_int_minmax(prob, name, lb=0, ub=1, which="min", **kwargs)
 
-    def lp_real_max(self, prob: LpProblem, name: str, **kwargs: Any) -> lparray[LpVariable]:
+    def lp_real_max(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray[LpVariable]:
         """
         Returns an array corresponding to the maximum value of self along axes.
 
@@ -483,7 +488,7 @@ class lparray(
         """
         return self._lp_minmax(prob, name, "max", LpContinuous, **kwargs)
 
-    def lp_real_min(self, prob: LpProblem, name: str, **kwargs: Any) -> lparray[LpVariable]:
+    def lp_real_min(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray[LpVariable]:
         """
         Returns an array corresponding to the minimum value of self along axes.
 
