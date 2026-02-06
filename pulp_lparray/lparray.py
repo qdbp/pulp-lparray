@@ -377,7 +377,7 @@ class lparray(
             lb = 0
             ub = 1
         elif lb is None or ub is None:
-            assert 0, "Need to supply constraints for non-binary variables!"
+            raise ValueError("Need to supply bounds for non-binary variables")
 
         assert which in ("min", "max")
 
@@ -410,7 +410,7 @@ class lparray(
             (target_br <= self).constrain(prob, f"{name}_gt_min")
             (target_br >= self - bigM * (1 - w)).constrain(prob, f"{name}_attains_min")
         else:
-            assert 0
+            raise ValueError("which must be 'min' or 'max'")
 
         return target
 
