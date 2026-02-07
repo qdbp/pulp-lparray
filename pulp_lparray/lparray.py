@@ -551,3 +551,54 @@ class lparray(
         # empty or = 0
         (self <= sum(ins)).constrain(prob, f"{name}_and_ub")
         return self
+
+    def lp_bin_argmax(
+        self: lparray[LpVariable],
+        prob: LpProblem,
+        name: str,
+        *,
+        axis: int,
+        bigM: Number,
+    ) -> lparray[LpVariable]:
+        """Return one-hot argmax indicators along `axis`.
+
+        Output shape is `self.shape` with `axis` removed.
+        """
+        if not isinstance(axis, int) or not self.ndim > axis >= 0:
+            raise TypeError("axis must be a valid int axis")
+
+        # Indicator array, same shape as self.
+        w = lparray.create_like(f"{name}_w", self, lowBound=0, upBound=1, cat=LpBinary)
+        (w.sum(axis=axis) == 1).constrain(prob, f"{name}_onehot")
+
+        # For each slice orthogonal to `axis`, enforce that the chosen entry is
+        # maximal via pairwise big-M comparisons.
+        keep_axis = tuple(ix for ix in range(self.ndim) if ix != axis)
+        iter_shape = tuple(self.shape[ax] for ax in keep_axis)
+        for keep_ix in np.ndindex(iter_shape):
+            sl: list[int | slice] = [slice(None)] * self.ndim
+            for k, ax in enumerate(keep_axis):
+                sl[ax] = keep_ix[k]
+            slc = tuple(sl)
+            xs = self[slc]
+            ws = w[slc]
+
+            for j in range(self.shape[axis]):
+                for k in range(self.shape[axis]):
+                    if j == k:
+                        continue
+                    # If ws[j] == 1 then xs[j] >= xs[k].
+                    prob += xs[j] >= xs[k] - bigM * (1 - ws[j])
+
+        return w
+
+    def lp_bin_argmin(
+        self: lparray[LpVariable],
+        prob: LpProblem,
+        name: str,
+        *,
+        axis: int,
+        bigM: Number,
+    ) -> lparray[LpVariable]:
+        """Return one-hot argmin indicators along `axis`."""
+        return (-self).lp_bin_argmax(prob, name, axis=axis, bigM=bigM)

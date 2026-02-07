@@ -166,3 +166,21 @@ def test_bin_or() -> None:
     prob.solve()
 
     assert prob.objective.value() == -10
+
+
+def test_argmax() -> None:
+    prob = pp.LpProblem("argmax", pp.LpMaximize)
+    X = lparray.create_anon("arr", (5,), cat=pp.LpInteger, lowBound=0, upBound=10)
+
+    # force X to take fixed values
+    vals = np.array([1, 3, 10, 4, 9])
+    for i, v in enumerate(vals):
+        c = X[i] == v
+        c.name = f"fix{i}"
+        prob += c
+
+    w = X.lp_bin_argmax(prob, "amax", axis=0, bigM=100)
+    prob.solve()
+
+    chosen = int(np.argmax(w.values))
+    assert chosen == int(np.argmax(vals))
