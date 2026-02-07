@@ -3,6 +3,7 @@ import numpy.random as npr
 import pulp as pp
 from pulp import LpBinary, LpMaximize
 
+from examples.logistics_facility_topk_pwl import build_demo_model
 from pulp_lparray import lparray
 
 
@@ -246,3 +247,28 @@ def test_piecewise_linear_sos2() -> None:
     prob += y.item()
     prob.solve()
     assert abs(y.values.item() - 1) < 1e-6
+
+
+def test_logistics_demo_model() -> None:
+    prob, vars_ = build_demo_model()
+    prob.solve()
+
+    assert pp.LpStatus[prob.status] == "Optimal"
+
+    open_ = vars_["open"].values
+    assert open_.sum() == 4
+    assert open_[:3].sum() == 2
+    assert open_[3:].sum() == 2
+
+    flow = vars_["flow"].values
+    demand = np.array(
+        [
+            [4, 2, 1],
+            [0, 3, 2],
+            [1, 1, 0],
+            [3, 0, 1],
+            [2, 2, 2],
+        ],
+        dtype=float,
+    )
+    assert np.allclose(flow.sum(axis=0), demand)

@@ -69,6 +69,86 @@ loss = (
 prob += loss
 ```
 
+### Logistics: facility activation + multi-commodity flows + piecewise costs
+
+From the wild: we have customers with product demands, a set of candidate
+facilities partitioned into regions, and we want to open *exactly K per region*.
+We also want convex, piecewise-linear operating cost as a function of facility
+throughput.
+
+The whole thing is a few array ops and a small loop over facilities for the
+piecewise costs:
+
+```python
+import numpy as np
+import pulp as pp
+from pulp import LpBinary, LpContinuous, LpMinimize
+
+from pulp_lparray import lparray
+
+R, F, C, P = 2, 6, 5, 3
+facility_region = np.array([0, 0, 0, 1, 1, 1])
+
+demand = np.array(
+    [
+        [4, 2, 1],
+        [0, 3, 2],
+        [1, 1, 0],
+        [3, 0, 1],
+        [2, 2, 2],
+    ],
+    dtype=float,
+)  # (C, P)
+
+cap = np.array([12, 6, 6, 12, 6, 6], dtype=float)  # (F,)
+open_cost = np.array([10, 5, 7, 10, 5, 7], dtype=float)  # (F,)
+
+ship_cost = np.array(
+    [
+        [2, 2, 3, 9, 9],
+        [3, 1, 2, 9, 9],
+        [2, 3, 1, 9, 9],
+        [9, 9, 9, 2, 2],
+        [9, 9, 9, 3, 1],
+        [9, 9, 9, 2, 3],
+    ],
+    dtype=float,
+)  # (F, C)
+
+K = 2
+prob = pp.LpProblem("facility_topk_pwl", LpMinimize)
+
+open_ = lparray.create_anon("open", (F,), lowBound=0, upBound=1, cat=LpBinary)
+flow = lparray.create_anon("flow", (F, C, P), lowBound=0, upBound=None, cat=LpContinuous)
+
+(flow.sum(axis=0) == demand).constrain(prob, "demand")
+
+throughput = flow.sum(axis=(1, 2))
+(throughput <= cap * open_).constrain(prob, "cap")
+
+for r in range(R):
+    (open_[facility_region == r].sum() == K).constrain(prob, f"region{r}_k")
+
+op_cost = lparray.create_anon("op_cost", (F,), lowBound=0, upBound=None, cat=LpContinuous)
+for f in range(F):
+    dummy = lparray.create_anon(f"pwl_d{f}", (), cat=LpContinuous)
+    x, y = dummy.piecewise_linear_sos2(
+        prob,
+        f"pwl{f}",
+        x=[0, 5, cap[f]],
+        y=[0, 5, 5 + 3 * (cap[f] - 5)],
+    )
+    prob += x.item() == throughput[f]
+    prob += op_cost[f] == y.item()
+
+total_ship = (flow * ship_cost[:, :, None]).sumit()
+total_open = (open_ * open_cost).sumit()
+total_op = op_cost.sumit()
+prob += total_ship + total_open + total_op
+
+prob.solve()
+```
+
 ## Features
 
 It's just PuLP under the hood: `LpVariable`, `LpAffineExpression` and
