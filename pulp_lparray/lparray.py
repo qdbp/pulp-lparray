@@ -13,6 +13,7 @@ from pulp import (
     LpInteger,
     LpProblem,
     LpVariable,
+    lpSum,
     value,
 )
 
@@ -602,3 +603,179 @@ class lparray(
     ) -> lparray[LpVariable]:
         """Return one-hot argmin indicators along `axis`."""
         return (-self).lp_bin_argmax(prob, name, axis=axis, bigM=bigM)
+
+    def lp_bin_topk(
+        self: lparray[LpVariable],
+        prob: LpProblem,
+        name: str,
+        *,
+        axis: int,
+        k: int,
+        bigM: Number,
+    ) -> lparray[LpVariable]:
+        """Return binary selectors choosing exactly `k` items per slice.
+
+        For each slice orthogonal to `axis`, enforces that all selected entries
+        are >= all unselected entries (ties permitted).
+        """
+        if not isinstance(axis, int) or not self.ndim > axis >= 0:
+            raise TypeError("axis must be a valid int axis")
+        if not isinstance(k, int) or not 0 <= k <= self.shape[axis]:
+            raise ValueError("k must be an int in [0, axis_size]")
+
+        w = lparray.create_like(f"{name}_w", self, lowBound=0, upBound=1, cat=LpBinary)
+        (w.sum(axis=axis) == k).constrain(prob, f"{name}_k")
+
+        keep_axis = tuple(ix for ix in range(self.ndim) if ix != axis)
+        iter_shape = tuple(self.shape[ax] for ax in keep_axis)
+        for keep_ix in np.ndindex(iter_shape):
+            sl: list[int | slice] = [slice(None)] * self.ndim
+            for kk, ax in enumerate(keep_axis):
+                sl[ax] = keep_ix[kk]
+            slc = tuple(sl)
+            xs = self[slc]
+            ws = w[slc]
+
+            # If j selected and k not selected => x[j] >= x[k].
+            for j in range(self.shape[axis]):
+                for kk in range(self.shape[axis]):
+                    if j == kk:
+                        continue
+                    prob += xs[j] >= xs[kk] - bigM * (1 - ws[j] + ws[kk])
+
+        return w
+
+    @classmethod
+    def one_hot(
+        cls,
+        name: str,
+        shape: tuple[int, ...],
+        *,
+        axis: int = -1,
+    ) -> lparray[LpVariable]:
+        """Create a binary lparray intended for one-hot constraints."""
+        if axis < 0:
+            axis += len(shape)
+        if not 0 <= axis < len(shape):
+            raise ValueError("axis out of range")
+        return cls.create_anon(name, shape, cat=LpBinary)
+
+    def constrain_one_hot(
+        self: lparray[LpVariable],
+        prob: LpProblem,
+        name: str,
+        *,
+        axis: int = -1,
+    ) -> None:
+        if axis < 0:
+            axis += self.ndim
+        (self.sum(axis=axis) == 1).constrain(prob, f"{name}_onehot")
+
+    def all_different(
+        self: lparray[LpVariable],
+        prob: LpProblem,
+        name: str,
+        *,
+        axis: int = 0,
+    ) -> None:
+        """All-different for binary one-hot blocks.
+
+        Interprets `self` as a one-hot tensor where `axis` is the value axis.
+        Enforces that across all other positions, each value appears <= 1.
+        """
+        if axis < 0:
+            axis += self.ndim
+        other_axes = tuple(ax for ax in range(self.ndim) if ax != axis)
+        (self.sum(axis=other_axes) <= 1).constrain(prob, f"{name}_alldiff")
+
+    def indicator_le(
+        self: lparray[LpAffineExpression],
+        prob: LpProblem,
+        name: str,
+        *,
+        b: lparray[LpVariable],
+        rhs: Number,
+        bigM: Number,
+    ) -> None:
+        """b == 1 => self <= rhs (big-M)."""
+        (self <= rhs + bigM * (1 - b)).constrain(prob, f"{name}_ind_le")
+
+    def indicator_ge(
+        self: lparray[LpAffineExpression],
+        prob: LpProblem,
+        name: str,
+        *,
+        b: lparray[LpVariable],
+        rhs: Number,
+        bigM: Number,
+    ) -> None:
+        """b == 1 => self >= rhs (big-M)."""
+        (self >= rhs - bigM * (1 - b)).constrain(prob, f"{name}_ind_ge")
+
+    def piecewise_linear_sos2(
+        self: lparray[LpAffineExpression],
+        prob: LpProblem,
+        name: str,
+        *,
+        x: list[Number],
+        y: list[Number],
+    ) -> tuple[lparray[LpVariable], lparray[LpAffineExpression]]:
+        """SOS2 piecewise-linear y(x) with convex-combination lambdas.
+
+        Returns:
+            (x_var, y_var)
+        """
+        if len(x) != len(y) or len(x) < 2:
+            raise ValueError("x and y must have same length >= 2")
+
+        lam = lparray.create_anon(f"{name}_lam", (len(x),), lowBound=0, upBound=1, cat=LpContinuous)
+        (lam.sum() == 1).constrain(prob, f"{name}_lam_sum")
+
+        # Adjacent-only activation (classic SOS2 encoding).
+        z = lparray.create_anon(f"{name}_z", (len(x) - 1,), lowBound=0, upBound=1, cat=LpBinary)
+        (z.sum() == 1).constrain(prob, f"{name}_z_sum")
+        for i in range(len(x)):
+            if i == 0:
+                prob += lam[i] <= z[0]
+            elif i == len(x) - 1:
+                prob += lam[i] <= z[-1]
+            else:
+                prob += lam[i] <= z[i - 1] + z[i]
+
+        x_var = lparray.create_anon(f"{name}_x", (), cat=LpContinuous)
+        y_var = lparray.create_anon(f"{name}_y", (), cat=LpContinuous)
+        prob += x_var.item() == lpSum(lam[i] * x[i] for i in range(len(x)))
+        prob += y_var.item() == lpSum(lam[i] * y[i] for i in range(len(y)))
+
+        return x_var, y_var
+
+    def soft_select_max(
+        self: lparray[LpVariable],
+        prob: LpProblem,
+        name: str,
+        *,
+        axis: int,
+        k: int,
+        penalty: Number,
+        bigM: Number,
+    ) -> tuple[lparray[LpVariable], lparray[LpAffineExpression]]:
+        """Select up to k maxima with slack penalty.
+
+        Returns (w, slack_cost) where slack_cost is an affine expression you can
+        add to objective.
+        """
+        if not isinstance(k, int) or k <= 0:
+            raise ValueError("k must be positive")
+        w = lparray.create_like(f"{name}_w", self, lowBound=0, upBound=1, cat=LpBinary)
+        (w.sum(axis=axis) <= k).constrain(prob, f"{name}_k")
+
+        # slack per slice: if less than k selected, pay penalty.
+        slack = lparray.create_anon(
+            f"{name}_slack", self.sum(axis=axis).shape, lowBound=0, upBound=k, cat=LpInteger
+        )
+        (slack == k - w.sum(axis=axis)).constrain(prob, f"{name}_slack_def")
+        cost = (slack * penalty).sumit()
+
+        # Encourage selection to be of maxima.
+        self.lp_bin_topk(prob, f"{name}_topk", axis=axis, k=k, bigM=bigM)
+        return w, cost

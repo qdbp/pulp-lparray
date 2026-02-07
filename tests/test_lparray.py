@@ -184,3 +184,65 @@ def test_argmax() -> None:
 
     chosen = int(np.argmax(w.values))
     assert chosen == int(np.argmax(vals))
+
+
+def test_topk() -> None:
+    prob = pp.LpProblem("topk", pp.LpMaximize)
+    X = lparray.create_anon("arr", (6,), cat=pp.LpInteger, lowBound=0, upBound=10)
+
+    vals = np.array([1, 7, 10, 4, 9, 2])
+    for i, v in enumerate(vals):
+        c = X[i] == v
+        c.name = f"fix{i}"
+        prob += c
+
+    w = X.lp_bin_topk(prob, "tk", axis=0, k=2, bigM=100)
+    prob.solve()
+
+    picked = set(np.where(w.values > 0.5)[0].tolist())
+    assert picked == {2, 4}
+
+
+def test_one_hot_and_all_different() -> None:
+    prob = pp.LpProblem("ohad", pp.LpMaximize)
+
+    # 3 positions choose among 4 values, all-different.
+    X = lparray.one_hot("x", (3, 4), axis=1)
+    X.constrain_one_hot(prob, "onehot", axis=1)
+    X.all_different(prob, "ad", axis=1)
+
+    # Force a specific assignment: values 0,2,3.
+    for i, j in enumerate([0, 2, 3]):
+        c = X[i, j] == 1
+        c.name = f"fix{i}"
+        prob += c
+
+    prob.solve()
+    assert np.allclose(X.values.sum(axis=1), 1)
+    assert np.all(X.values.sum(axis=0) <= 1)
+
+
+def test_indicator_le() -> None:
+    prob = pp.LpProblem("ind", pp.LpMaximize)
+    x = lparray.create_anon("x", (), cat=pp.LpInteger, lowBound=0, upBound=10)
+    b = lparray.create_anon("b", (), cat=pp.LpBinary)
+
+    # b=1 => x <= 2 ; objective maximizes x so will set b=0.
+    x.indicator_le(prob, "ind", b=b, rhs=2, bigM=100)
+    prob += x.item()
+    prob.solve()
+    assert x.values.item() == 10
+
+
+def test_piecewise_linear_sos2() -> None:
+    prob = pp.LpProblem("pwl", pp.LpMinimize)
+    dummy = lparray.create_anon("d", (), cat=pp.LpContinuous)
+    x, y = dummy.piecewise_linear_sos2(prob, "p", x=[0, 1, 2], y=[0, 1, 4])
+
+    # pick x=1 => y=1
+    c = x.item() == 1
+    c.name = "fixx"
+    prob += c
+    prob += y.item()
+    prob.solve()
+    assert abs(y.values.item() - 1) < 1e-6
