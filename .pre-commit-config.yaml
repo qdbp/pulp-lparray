@@ -1,72 +1,35 @@
+default_language_version:
+  python: python3
+
 repos:
-  # AUTOFLAKE
-  - hooks:
-      - id: autoflake
-        args:
-          - --in-place
-          - --remove-unused-variables
-          - --remove-all-unused-imports
-    repo: https://github.com/myint/autoflake
-    rev: ''
-  # BLACK-   id: autoflake
-  - hooks:
-      - id: black
-        language_version: python3
-        args:
-          - --line-length=80
-    repo: https://github.com/psf/black
-    rev: 20.8b1
-  # DOCFORMATTER
-  - hooks:
-      - id: docformatter
-        args:
-          - -i
-          - -r
-          - --pre-summary-newline
-          - --make-summary-multi-line
-    repo: https://github.com/myint/docformatter
-    rev: ''
-  # ISORT
-  - hooks:
-      - id: isort
-        args:
-          - --profile=black
-          - --line-length=80
-    repo: https://github.com/pycqa/isort
-    rev: ''
-  # LOCAL HOOKS
   - repo: local
     hooks:
-      - id: mypy
-        name: mypy
+      - id: ruff
+        name: ruff
+        entry: env UV_CACHE_DIR=/tmp/uv-cache uv run -q ruff check --fix
         language: system
-        entry: .venv/bin/mypy
-        args:
-          - --config-file=mypy.ini
-        exclude: tests
-        types:
-          - python
-        files: pulp_lparray
-      # pytest
+        types: [python]
+
+      - id: ruff-format
+        name: ruff-format
+        entry: env UV_CACHE_DIR=/tmp/uv-cache uv run -q ruff format
+        language: system
+        types: [python]
+
+      - id: ty
+        name: ty
+        entry: env UV_CACHE_DIR=/tmp/uv-cache uv run -q ty check --ignore invalid-argument-type --ignore possibly-missing-attribute --ignore no-matching-overload --ignore invalid-return-type --ignore invalid-method-override --ignore invalid-assignment pulp_lparray
+        language: system
+        pass_filenames: false
+
+      - id: ty-examples
+        name: ty-examples
+        entry: env UV_CACHE_DIR=/tmp/uv-cache uv run -q ty check --ignore invalid-argument-type --ignore invalid-method-override --ignore invalid-assignment examples
+        language: system
+        pass_filenames: false
+
       - id: pytest
         name: pytest
+        entry: env UV_CACHE_DIR=/tmp/uv-cache uv run -q pytest
         language: system
-        entry: /usr/bin/pytest
-        args:
-          - tests
         pass_filenames: false
-        types:
-          - python
-      # version bump
-      - id: autoversion
-        name: autoversion
-        entry: /usr/bin/bash
-        language: system
-        args:
-          - -c
-          - >
-            sed -ri -e "s/(__version__ = .[0-9]+\.[0-9]+\.)[0-9]+/\1$(date +%Y%m%d%H%M%S)/g" setup.py
-            && git add setup.py
-        pass_filenames: false
-        types:
-          - python
