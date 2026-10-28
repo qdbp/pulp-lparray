@@ -1,7 +1,6 @@
 from collections.abc import Iterator
 
 import numpy as np
-import numpy.random as npr
 import pulp as pp
 import pytest
 from numpy.testing import assert_allclose
@@ -68,70 +67,6 @@ def test_super_sudoku() -> None:
     solve(prob)
 
     assert check_super_sudoku(X.values)
-
-
-# noinspection PyArgumentList
-def test_logical_clip() -> None:
-
-    prob = pp.LpProblem("logical_clip", pp.LpMinimize)
-    X = lparray.create(prob, "arr", (5, 5), cat=pp.LpInteger, lowBound=0, upBound=5)
-    (X.sum(axis=1) >= 6).constrain(prob, "colsum")
-    (X.sum(axis=0) >= 6).constrain(prob, "rowsum")
-
-    lclip = X.logical_clip(prob, "lclip")
-
-    # dodging these
-    bern = npr.default_rng().binomial(3, 0.5, size=(5, 5))
-
-    prob += (X * bern).sum().item()
-    solve(prob)
-
-    assert X.values.max() > 1
-    assert lclip.values.max() <= 1
-    assert lclip.values.max() >= 0
-
-
-def test_abs() -> None:
-
-    N = 20
-
-    prob = pp.LpProblem("wavechaser", pp.LpMaximize)
-    X = lparray.create(prob, "arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1)
-    wave = 2 * npr.default_rng().binomial(1, 0.5, size=(N,)) - 1
-
-    xp, xm = X.abs_decompose(prob, "abs")
-    xabs = xp + xm
-
-    prob += (wave * X).sum().item()
-    solve(prob)
-
-    assert prob.objective == N
-    assert xabs.values.sum() == N
-
-    assert np.all(xp.values * wave >= 0)
-    assert np.all(-xm.values * wave >= 0)
-
-
-def test_logical_clip_again_because_i_forgot_i_already_had_a_test() -> None:
-    """
-    Binary knapsack problem, implemented inefficiently.
-    """
-
-    boxes_values = np.array([20, 10, 5, 1, 0])
-    box_sizes = np.array([15, 10, 10, 5, 1])
-
-    capacity = 30
-
-    prob = pp.LpProblem(sense=pp.LpMaximize)
-
-    taken = lparray.create(prob, "is_taken_base", box_sizes.shape, cat=pp.LpInteger)
-    clipped = taken.logical_clip(prob, "is_taken")
-
-    (box_sizes @ clipped <= capacity).constrain(prob, "MaxCapacity")
-    prob += (clipped * boxes_values).sum().item()
-    solve(prob)
-
-    assert np.allclose(clipped.values, [1, 1, 0, 1, 0])
 
 
 def test_piecewise_linear_sos2() -> None:
@@ -244,3 +179,17 @@ def test_extrema() -> None:
         assert (w.sum(axis=1) == 2).all()
         chosen, rest = np.where(w, vals, np.inf), np.where(w, -np.inf, vals)
         assert (chosen.min(axis=1) >= rest.max(axis=1)).all()
+
+
+def test_abs_and_logical_clip() -> None:
+    prob = LpProblem()
+    vals = np.random.default_rng(1).integers(-5, 6, size=(4, 6))
+    x = pinned(prob, vals)
+    p, m = x.abs_decompose(prob, "parts", bigM=5)
+    magnitude = x.abs(prob, "abs", bigM=5)
+    nonzero = magnitude.logical_clip(prob, "nonzero", bigM=5)
+    for _ in adversaries(prob, p, m, magnitude, nonzero):
+        assert_allclose(p.values, np.maximum(vals, 0), atol=1e-9)
+        assert_allclose(m.values, np.maximum(-vals, 0), atol=1e-9)
+        assert_allclose(magnitude.values, np.abs(vals), atol=1e-9)
+        assert_allclose(nonzero.values, vals != 0)

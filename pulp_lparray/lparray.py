@@ -27,9 +27,6 @@ type Number = int | float
 type Axis = int | tuple[int, ...] | None
 
 
-type Kwargs = dict[str, Any]
-
-
 # noinspection PyPep8Naming
 class lparray(ndarray):
     """
@@ -167,78 +164,27 @@ class lparray(ndarray):
                 raise TypeError(f"{_subscript(name, ix)}: {c!r} is not a constraint")
             prob.addConstraint(c, _subscript(name, ix))
 
-    def abs_decompose(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        bigM: Number = 1000.0,
-        **kwargs: Kwargs,
-    ) -> tuple[lparray, lparray]:
-        """
-        Generates two arrays, xp and xm, that sum to |self|, with the following
-        properties:
+    def abs_decompose(self, prob: LpProblem, name: str, *, bigM: float) -> tuple[lparray, lparray]:
+        """The positive and negative parts `(p, m)` of self: `p - m == self`, `p, m >= 0`,
+        and at most one of them nonzero. Requires `|self| <= bigM`."""
+        neg = lparray.create(prob, f"{name}_neg", self.shape, cat=LpBinary)
+        p = lparray.create(prob, f"{name}_p", self.shape, lowBound=0)
+        m = lparray.create(prob, f"{name}_m", self.shape, lowBound=0)
+        (p - m == self).constrain(prob, f"{name}_split")
+        (p <= bigM * (1 - neg)).constrain(prob, f"{name}_p_off")
+        (m <= bigM * neg).constrain(prob, f"{name}_m_off")
+        return p, m
 
-            xp >= 0
-            xm >= 0
-            xp == 0 XOR xm == 0
+    def abs(self, prob: LpProblem, name: str, *, bigM: float) -> lparray:
+        """`|self|`; requires `|self| <= bigM`."""
+        p, m = self.abs_decompose(prob, name, bigM=bigM)
+        return p + m
 
-        Uses the big M method.
-        Generates 2 * self.size visible new variables.
-        Generates 1 * self.size binary auxiliary variables.
-
-        Arguments:
-            prob: LpProblem to bind aux variables to
-            name: base name for generated variables
-            bigM: the -lower and upper bound on self to assume.
-            kwargs: extra arguments to `create`
-        """
-
-        # w == 1 <=> self <= 0
-        w = lparray.create(prob, f"{name}_abs_aux", self.shape, lowBound=0, upBound=1, cat=LpBinary)
-        # binding if self >= 0
-        (self <= bigM * (1 - w)).constrain(prob, f"{name}_lb")
-        # binding if self <= 0
-        (self >= -bigM * w).constrain(prob, f"{name}_ub")
-
-        # xp is the positive half of X, xm is the negative half of X
-        xp = lparray.create(prob, f"{name}_absp", self.shape, **kwargs)
-        xm = lparray.create(prob, f"{name}_absm", self.shape, **kwargs)
-
-        (xp >= 0).constrain(prob, f"{name}_abs_xplb")
-        (xm >= 0).constrain(prob, f"{name}_abs_xmlb")
-        (xp - xm == self).constrain(prob, f"{name}_absdecomp")
-
-        # xp >= 0 <=> xm == 0 and vice versa
-        (xp <= bigM * (1 - w)).constrain(prob, f"{name}_absxpexcl")
-        (xm <= bigM * w).constrain(prob, f"{name}_absxmexcl")
-
-        return xp, xm
-
-    def abs(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
-        """
-        Returns variable equal to |self|.
-
-        Thin wrapper around `abs_decompose`
-        """
-        xp, xm = self.abs_decompose(prob, name, **kwargs)
-        return xp + xm
-
-    def logical_clip(self, prob: LpProblem, name: str, bigM: Number = 1000) -> lparray:
-        """
-        Assumes self is integer >= 0.
-
-        Returns an array of the same shape as self containing
-            z_... = max(self_..., 1)
-
-        Generates self.size new variables.
-        """
-
-        z = lparray.create(prob, name, self.shape, cat=LpBinary)
-
+    def logical_clip(self, prob: LpProblem, name: str, *, bigM: float) -> lparray:
+        """Binary `min(self, 1)` of integral `0 <= self <= bigM`."""
+        z = lparray.create(prob, f"{name}_z", self.shape, cat=LpBinary)
         (self >= z).constrain(prob, f"{name}_lb")
         (self <= bigM * z).constrain(prob, f"{name}_ub")
-
         return z
 
     def lp_max(self, prob: LpProblem, name: str, *, axis: Axis = None, bigM: float) -> lparray:
