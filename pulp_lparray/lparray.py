@@ -1,3 +1,5 @@
+"""NumPy arrays of PuLP variables, affine expressions and constraints."""
+
 from __future__ import annotations
 
 import math
@@ -25,40 +27,19 @@ type Axis = int | tuple[int, ...] | None
 
 
 class lparray(np.ndarray[tuple[int, ...], np.dtype[np.object_]]):
-    """
-    A numpy array holding homogeneous LpVariables, LpAffineExpression or
-    LpConstraints.
+    """An object ndarray of PuLP variables, affine expressions or constraints.
 
-    All variables in the array will have the same:
-        - Lp* type
-        - (intrinsic) upper bound
-        - (intrinsic) lower bound
-    and all vectorized operations will preserve this invariant. External
-    manipulations that break this invariant will lead to incorrect behavior.
+    Arithmetic, indexing and broadcasting are NumPy's, applied elementwise, and NumPy functions
+    return lparrays; ufuncs that are not affine raise TypeError. `<=`, `>=` and `==` build arrays
+    of constraints, which `constrain` adds to a problem. Sums, ``@ and `dot` take time linear in
+    the contracted length. Reductions return 0-d lparrays, whose `item()` is the PuLP scalar.
 
-    All variables in an array are named, and share the same base name, which is
-    extended by indices into a collection of index sets whose product spans the
-    elements of the array. These index sets can be named or anonymous --
-    anonymous index sets are just int ranges.
+    Methods taking `(prob, name)` linearise nonlinear operations with auxiliary variables and
+    constraints named `{name}_{role}`. Those taking `bigM` require it to bound the spread of the
+    values involved; too small a bigM silently cuts off feasible solutions.
 
-    Implements vectorized versions of various LP operations, specifically:
-
-    All of:
-        lparray {<=, ==, >=} {lparray, LpVariable}
-    Will return an lparray of constraints: LpAffineExpressions with a sense.
-
-    All of:
-        lparray {+, -, *, /} {Real, ndarray[Real]}
-        lparray @ ndarray
-        lparray {+, -} {lparray, LpVariable}
-    Will return an lparray of LpAffineExpression with the expected semantics.
-
-    Constraint lparrays support the `constrain` method, which adds the
-    constraints to an LpProblem and returns the LpConstraints it stores.
-
-    In addition, an number of more sophisticated mathematical operations are
-    supported, many of which involve the creation of lparrays of auxiliary
-    variables behind the scenes.
+    Keep the lparray on the left of `+` and `-` against a scalar PuLP operand: PuLP treats a
+    right-hand array as an iterable and sums it into a single expression.
     """
 
     __hash__ = None
