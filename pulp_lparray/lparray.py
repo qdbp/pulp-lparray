@@ -734,34 +734,3 @@ class lparray(ndarray):
         prob += y_var.item() == lpSum(lam[i] * y[i] for i in range(len(y)))
 
         return x_var, y_var
-
-    def soft_select_max(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        axis: int,
-        k: int,
-        penalty: Number,
-        bigM: Number,
-    ) -> tuple[lparray, lparray]:
-        """Select up to k maxima with slack penalty.
-
-        Returns (w, slack_cost) where slack_cost is an affine expression you can
-        add to objective.
-        """
-        if not isinstance(k, int) or k <= 0:
-            raise ValueError("k must be positive")
-        w = lparray.create_like(f"{name}_w", self, lowBound=0, upBound=1, cat=LpBinary)
-        (w.sum(axis=axis) <= k).constrain(prob, f"{name}_k")
-
-        # slack per slice: if less than k selected, pay penalty.
-        slack = lparray.create_anon(
-            f"{name}_slack", self.sum(axis=axis).shape, lowBound=0, upBound=k, cat=LpInteger
-        )
-        (slack == k - w.sum(axis=axis)).constrain(prob, f"{name}_slack_def")
-        cost = (slack * penalty).sumit()
-
-        # Encourage selection to be of maxima.
-        self.lp_bin_topk(prob, f"{name}_topk", axis=axis, k=k, bigM=bigM)
-        return w, cost
