@@ -5,7 +5,7 @@ import pulp as pp
 import pytest
 from numpy.testing import assert_allclose
 from numpy.typing import ArrayLike
-from pulp import LpBinary, LpProblem
+from pulp import LpBinary, LpProblem, lpSum
 
 from examples.logistics_facility_topk_pwl import build_demo_model
 from pulp_lparray import lparray
@@ -26,7 +26,7 @@ def adversaries(prob: LpProblem, *outputs: lparray) -> Iterator[None]:
     """Solve under a random objective over `outputs` and then under its negation, so that an
     output its formulation leaves free strays from its oracle."""
     rng = np.random.default_rng(0)
-    push = sum((rng.uniform(-1, 1, o.shape) * o).sum() for o in outputs).item()
+    push = lpSum((rng.uniform(-1, 1, o.shape) * o).sum().item() for o in outputs)
     for sign in (1, -1):
         prob.setObjective(sign * push)
         solve(prob)
@@ -211,16 +211,16 @@ def test_pulp_scalar_operands() -> None:
     filled = np.zeros(3, dtype=object).view(lparray)
     filled[1:] = e
     values = np.random.default_rng(4).uniform(size=7)
-    for var, val in zip([*x.flat, *y.flat, v], values, strict=True):
+    for var, val in zip([*x.flat, *y.flat, v], values.tolist(), strict=True):
         var.varValue = val
-    X, Y, V = x.values, y.values, v.varValue
+    X, Y, V = values[:3], values[3:6], values[6]
     E = 2 * V + 1
     mask = [True, False, True]
     for got, want in [
         (x + v, X + V),
         (x - e, X - E),
         (2 * x + e, 2 * X + E),
-        (np.where(mask, x, e), np.where(mask, X, E)),
+        (np.where(mask, x, e), np.where(mask, X, E)),  # ty: ignore[no-matching-overload]
         (np.choose([0, 1, 0], [e, x]), np.choose([0, 1, 0], [E, X])),
         (filled, [0, E, E]),
         (x <= v, X - V),

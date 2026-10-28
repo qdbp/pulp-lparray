@@ -15,13 +15,7 @@ repos:
 
       - id: ty
         name: ty
-        entry: env UV_CACHE_DIR=/tmp/uv-cache uv run -q ty check --ignore invalid-argument-type --ignore possibly-missing-attribute --ignore no-matching-overload --ignore invalid-return-type --ignore invalid-method-override --ignore invalid-assignment pulp_lparray
-        language: system
-        pass_filenames: false
-
-      - id: ty-examples
-        name: ty-examples
-        entry: env UV_CACHE_DIR=/tmp/uv-cache uv run -q ty check --ignore invalid-argument-type --ignore invalid-method-override --ignore invalid-assignment examples
+        entry: env UV_CACHE_DIR=/tmp/uv-cache uv run -q ty check
         language: system
         pass_filenames: false
 

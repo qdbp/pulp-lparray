@@ -4,7 +4,6 @@ import math
 from typing import TYPE_CHECKING, Any, Literal, Self
 
 import numpy as np
-from numpy import ndarray
 from numpy.lib.array_utils import normalize_axis_tuple
 from pulp import (
     LpAffineExpression,
@@ -21,13 +20,11 @@ if TYPE_CHECKING:
 
     from numpy.typing import ArrayLike, NDArray
 
-type LpVarType = Literal["Binary", "Integer", "Continuous"]
-type Number = int | float
+type Category = Literal["Continuous", "Integer", "Binary"]
 type Axis = int | tuple[int, ...] | None
 
 
-# noinspection PyPep8Naming
-class lparray(ndarray):
+class lparray(np.ndarray[tuple[int, ...], np.dtype[np.object_]]):
     """
     A numpy array holding homogeneous LpVariables, LpAffineExpression or
     LpConstraints.
@@ -72,19 +69,26 @@ class lparray(ndarray):
 
     if TYPE_CHECKING:
         # NumPy's stubs type these as plain or boolean ndarrays; __array_ufunc__ returns lparrays.
+        def __getitem__(self, key: object, /) -> Any: ...  # noqa: ANN401
         def __neg__(self) -> lparray: ...
         def __add__(self, other: object, /) -> lparray: ...
-        def __radd__(self, other: object, /) -> lparray: ...
+        def __radd__(self, other: ArrayLike, /) -> lparray: ...
         def __sub__(self, other: object, /) -> lparray: ...
-        def __rsub__(self, other: object, /) -> lparray: ...
+        def __rsub__(self, other: ArrayLike, /) -> lparray: ...
         def __mul__(self, other: object, /) -> lparray: ...
-        def __rmul__(self, other: object, /) -> lparray: ...
+        def __rmul__(self, other: ArrayLike, /) -> lparray: ...
         def __truediv__(self, other: object, /) -> lparray: ...
         def __matmul__(self, other: object, /) -> lparray: ...
-        def __rmatmul__(self, other: object, /) -> lparray: ...
-        def __le__(self, other: object, /) -> lparray: ...
-        def __ge__(self, other: object, /) -> lparray: ...
-        def __eq__(self, other: object, /) -> lparray: ...
+        def __rmatmul__(self, other: ArrayLike, /) -> lparray: ...
+        # Deliberately incompatible: comparisons build constraints, and the rest keep the subclass.
+        def __le__(self, other: object, /) -> lparray: ...  # ty: ignore[invalid-method-override]
+        def __ge__(self, other: object, /) -> lparray: ...  # ty: ignore[invalid-method-override]
+        def __eq__(self, other: object, /) -> lparray: ...  # ty: ignore[invalid-method-override]
+        def sum(self, axis: Axis = None, *, keepdims: bool = False) -> lparray: ...  # ty: ignore[invalid-method-override]
+        def reshape(self, *shape: Any, **kwargs: Any) -> lparray: ...  # ty: ignore[invalid-method-override]
+        def ravel(self, order: Literal["K", "A", "C", "F"] = "C") -> lparray: ...  # ty: ignore[invalid-method-override]
+        def flatten(self, order: Literal["K", "A", "C", "F"] = "C") -> lparray: ...  # ty: ignore[invalid-method-override]
+        def squeeze(self, axis: Axis = None) -> lparray: ...  # ty: ignore[invalid-method-override]
 
     @classmethod
     def create(
@@ -93,9 +97,9 @@ class lparray(ndarray):
         name: str,
         shape: int | tuple[int, ...],
         *,
-        lowBound: Number | None = None,
-        upBound: Number | None = None,
-        cat: LpVarType = "Continuous",
+        lowBound: float | None = None,
+        upBound: float | None = None,
+        cat: Category = "Continuous",
     ) -> Self:
         """Variables of `prob` named `name(i,j,…)` by their indices."""
         arr = np.empty(shape, dtype=object)
@@ -141,12 +145,14 @@ class lparray(ndarray):
             return _wrap(_dot(*args, **kwargs))
         return _wrap(super().__array_function__(func, types, args, kwargs))
 
-    def dot(self, b: ArrayLike, /) -> lparray:
+    def dot(self, b: ArrayLike, /) -> lparray:  # ty: ignore[invalid-method-override]
         """`np.dot(self, b)`, which ndarray.dot would compute without dispatching to lparray."""
         return np.dot(self, b)
 
-    def __setitem__(self, key: object, value: object, /) -> None:
-        super().__setitem__(key, _shield(value))
+    if not TYPE_CHECKING:  # NumPy's stubs type assignment as it is
+
+        def __setitem__(self, key: object, value: object, /) -> None:
+            super().__setitem__(key, _shield(value))
 
     @property
     def values(self) -> NDArray[np.float64]:
@@ -291,17 +297,15 @@ def _box(x: object) -> NDArray[np.object_]:
     return box
 
 
-def _shield(x: object) -> object:
+def _shield[T](x: T) -> T | NDArray[np.object_]:
     """Box a PuLP 4 expression or constraint in a 0-d array, and those within lists and tuples:
     both define __len__ and __getitem__, so NumPy would read one as the sequence of its
     variables."""
     match x:
         case LpAffineExpression() | LpConstraint():
             return _box(x)
-        case list():
-            return list(map(_shield, x))
-        case tuple():
-            return tuple(map(_shield, x))
+        case list() | tuple() if type(x) in (list, tuple):
+            return type(x)(map(_shield, x))
         case _:
             return x
 

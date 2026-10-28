@@ -39,11 +39,11 @@ ignore = [
   "TRY",    # try/except micro-style (intentionally not enforced)
   "COM",    # trailing commas (formatter handles)
   "EM",     # exception message micro-style
-  "N",      # allow pulp-ish naming (X, N, etc)
+  "N",      # PuLP naming (lowBound, upBound, bigM) and the lowercase lparray class
   "PLR0913",# keep high-arity internal helpers
   "PLR2004",# magic numbers are fine
-  "S",      # asserts in tests / internal sentinels
   "TC",     # type-checking blocks
+  "CPY",    # no per-file copyright headers
 ]
 
 [tool.ruff.format]
@@ -51,3 +51,9 @@ quote-style = "preserve"
 
 [tool.ruff.lint.flake8-annotations]
 allow-star-arg-any = true # forwarding NumPy's dynamically typed dispatch arguments
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.ty.terminal]
+error-on-warning = true
