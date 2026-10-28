@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Literal, NoReturn, Self
+from typing import TYPE_CHECKING, Any, Literal, Self
 
 import numpy as np
 from numpy import ndarray
@@ -64,9 +64,10 @@ class lparray(ndarray):
     variables behind the scenes.
     """
 
+    __hash__ = None
+
     if TYPE_CHECKING:
-        # NumPy's stubs type ndarray arithmetic as returning ndarray; __array_ufunc__ returns
-        # lparrays.
+        # NumPy's stubs type these as plain or boolean ndarrays; __array_ufunc__ returns lparrays.
         def __neg__(self) -> lparray: ...
         def __add__(self, other: object, /) -> lparray: ...
         def __radd__(self, other: object, /) -> lparray: ...
@@ -77,6 +78,9 @@ class lparray(ndarray):
         def __truediv__(self, other: object, /) -> lparray: ...
         def __matmul__(self, other: object, /) -> lparray: ...
         def __rmatmul__(self, other: object, /) -> lparray: ...
+        def __le__(self, other: object, /) -> lparray: ...
+        def __ge__(self, other: object, /) -> lparray: ...
+        def __eq__(self, other: object, /) -> lparray: ...
 
     @classmethod
     def create(
@@ -104,8 +108,15 @@ class lparray(ndarray):
                 result = _lpsum(*args, **kwargs)
             case np.matmul, "__call__":
                 result = _matmul(*args, **kwargs)
-            case _:
+            case np.less_equal | np.greater_equal | np.equal, "__call__":
+                result = ufunc(*args, **kwargs | {"dtype": object})
+            case np.add | np.subtract | np.multiply | np.true_divide | np.negative | np.positive, _:
                 result = getattr(ufunc, method)(*args, **kwargs)
+            case _:
+                raise TypeError(
+                    f"lparray supports affine ufuncs, <=, >= and ==, not np.{ufunc.__name__}."
+                    f"{method}; lp_max, lp_min and abs linearise extrema and magnitudes"
+                )
         if out:
             return out[0] if len(out) == 1 else out
         return _wrap(result)
@@ -124,21 +135,6 @@ class lparray(ndarray):
     def dot(self, b: ArrayLike, /) -> lparray:
         """`np.dot(self, b)`, which ndarray.dot would compute without dispatching to lparray."""
         return np.dot(self, b)
-
-    def __ge__(self, other: object) -> lparray:
-        return np.greater_equal(self, other, dtype=object)
-
-    def __le__(self, other: object) -> lparray:
-        return np.less_equal(self, other, dtype=object)
-
-    def __lt__(self, other: object) -> NoReturn:
-        raise NotImplementedError("lparrays support only <=, >=, and ==")
-
-    def __gt__(self, other: object) -> NoReturn:
-        raise NotImplementedError("lparrays support only <=, >=, and ==")
-
-    def __eq__(self, other: object) -> lparray:
-        return np.equal(self, other, dtype=object)
 
     @property
     def values(self) -> NDArray[np.float64]:

@@ -42,7 +42,6 @@ ignore = [
   "N",      # allow pulp-ish naming (X, N, etc)
   "PLR0913",# keep high-arity internal helpers
   "PLR2004",# magic numbers are fine
-  "PLW1641",# numpy subclass hash semantics are intentional
   "S",      # asserts in tests / internal sentinels
   "TC",     # type-checking blocks
 ]

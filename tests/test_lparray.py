@@ -117,6 +117,8 @@ def test_linear_algebra() -> None:
         assert_allclose(got.values, want)
     with pytest.raises(ValueError, match="contract"):
         x @ m[:3]
+    with pytest.raises(TypeError):  # NumPy would take PuLP comparisons for truth values
+        np.maximum(x, 0)
 
 
 def test_logic() -> None:
