@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable
-from typing import Any, Generic, Literal, NoReturn, Protocol, TypeVar, Union
+from typing import Any, Literal, NoReturn, Protocol, Union
 
 import numpy as np
 from numpy import ndarray
 from pulp import (
-    LpAffineExpression,
     LpBinary,
     LpConstraint,
     LpContinuous,
@@ -21,8 +20,6 @@ LpComparable = Union["lparray", LpVariable, int, float]
 LpVarType = Literal["Binary", "Integer", "Continuous"]
 
 Number = Union[int, float]
-LP = TypeVar("LP", LpVariable, LpAffineExpression, LpComparable, LpConstraint)
-LPV = TypeVar("LPV", LpVariable, LpAffineExpression)
 
 
 class HasShape(Protocol):
@@ -37,10 +34,7 @@ def count_out(it: Iterable[Any]) -> list[int]:
 
 
 # noinspection PyPep8Naming
-class lparray(
-    ndarray,
-    Generic[LP],
-):
+class lparray(ndarray):
     """
     A numpy array holding homogeneous LpVariables, LpAffineExpression or
     LpConstraints.
@@ -86,7 +80,7 @@ class lparray(
         lowBound: Number | None = None,
         upBound: Number | None = None,
         cat: LpVarType = "Continuous",
-    ) -> lparray[LpVariable]:
+    ) -> lparray:
         """
         Creates an lparray with shape from a cartesian product of index sets.
 
@@ -143,10 +137,10 @@ class lparray(
         arr = np.zeros(tuple(len(ixset) for ixset in index_sets), dtype=object)
         recursive_worker(name, arr, index_sets)
 
-        return arr.view(lparray)  # ty: ignore[invalid-return-type]
+        return arr.view(lparray)
 
     @classmethod
-    def create_like(cls, name: str, like: HasShape, **kwargs: Kwargs) -> lparray[LpVariable]:
+    def create_like(cls, name: str, like: HasShape, **kwargs: Kwargs) -> lparray:
         """
         Creates an anonymous lparray with the same shape as a passed array.
 
@@ -155,14 +149,12 @@ class lparray(
             like: an object supporting `.shape` whose shape will be used
 
         Returns:
-            a new lparray[LpVariable]
+            a new lparray
         """
         return cls.create_anon(name, like.shape, **kwargs)
 
     @classmethod
-    def create_anon(
-        cls, name: str, shape: tuple[int, ...], **kwargs: Kwargs
-    ) -> lparray[LpVariable]:
+    def create_anon(cls, name: str, shape: tuple[int, ...], **kwargs: Kwargs) -> lparray:
         """
         Creates an lparray with a given shape and nameless index sets.
 
@@ -177,10 +169,10 @@ class lparray(
         index_sets = tuple(list(range(d)) for d in shape)
         return cls.create(name, index_sets, **kwargs)
 
-    def __ge__(self, other: LpComparable) -> lparray[LpConstraint]:
+    def __ge__(self, other: LpComparable) -> lparray:
         return np.greater_equal(self, other, dtype=object)
 
-    def __le__(self, other: LpComparable) -> lparray[LpConstraint]:
+    def __le__(self, other: LpComparable) -> lparray:
         return np.less_equal(self, other, dtype=object)
 
     def __lt__(self, other: LpComparable) -> NoReturn:
@@ -189,11 +181,11 @@ class lparray(
     def __gt__(self, other: LpComparable) -> NoReturn:
         raise NotImplementedError("lparrays support only <=, >=, and ==")
 
-    def __eq__(self, other: LpComparable) -> lparray[LpConstraint]:
+    def __eq__(self, other: LpComparable) -> lparray:
         return np.equal(self, other, dtype=object)
 
     @property
-    def values(self: lparray[LPV]) -> np.ndarray:
+    def values(self) -> np.ndarray:
         """
         Returns the underlying values of the PuLP variables by calling
         `pulp.value` on each element of self.
@@ -206,7 +198,7 @@ class lparray(
 
         return np.vectorize(value)(self).view(np.ndarray)
 
-    def constrain(self: lparray[LpConstraint], prob: LpProblem, name: str) -> None:
+    def constrain(self, prob: LpProblem, name: str) -> None:
         """
         Applies the constraints contained in self to the problem.
 
@@ -247,13 +239,13 @@ class lparray(
         recursive_worker(prob, self, name)
 
     def abs_decompose(
-        self: lparray[LPV],
+        self,
         prob: LpProblem,
         name: str,
         *,
         bigM: Number = 1000.0,
         **kwargs: Kwargs,
-    ) -> tuple[lparray[LpVariable], lparray[LpVariable]]:
+    ) -> tuple[lparray, lparray]:
         """
         Generates two arrays, xp and xm, that sum to |self|, with the following
         properties:
@@ -294,7 +286,7 @@ class lparray(
 
         return xp, xm
 
-    def abs(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray[LpAffineExpression]:
+    def abs(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
         """
         Returns variable equal to |self|.
 
@@ -312,7 +304,7 @@ class lparray(
         lowBound: Number | None = None,
         upBound: Number | None = None,
         cat: LpVarType = "Continuous",
-    ) -> lparray[LpAffineExpression]:
+    ) -> lparray:
         xp, xm = self.abs_decompose(
             prob,
             name,
@@ -323,7 +315,7 @@ class lparray(
         )
         return xp + xm
 
-    def logical_clip(self, prob: LpProblem, name: str, bigM: Number = 1000) -> lparray[LpVariable]:
+    def logical_clip(self, prob: LpProblem, name: str, bigM: Number = 1000) -> lparray:
         """
         Assumes self is integer >= 0.
 
@@ -358,7 +350,7 @@ class lparray(
         ub: Number | None = None,
         bigM: Number = 1000,
         axis: int | tuple[int, ...] | None = None,
-    ) -> lparray[LpVariable]:
+    ) -> lparray:
         r"""
         Returns an lparray the min/max of the given lparray along an axis.
 
@@ -409,15 +401,13 @@ class lparray(
 
         # array of maxes
         target_shape = sum((self.shape[ax : ax + 1] for ax in keep_axis), ())
-        target: lparray[LpVariable] = lparray.create_anon(
-            name, target_shape, lowBound=lb, upBound=ub, cat=cat
-        )
+        target: lparray = lparray.create_anon(name, target_shape, lowBound=lb, upBound=ub, cat=cat)
 
         # broadcastable version for comparison with self
         br = tuple(
             (slice(None, None, None) if ax in keep_axis else None) for ax in range(self.ndim)
         )
-        target_br: lparray[LpVariable] = target[br]
+        target_br: lparray = target[br]
 
         # indicator variable array.
         # w[ixs ∈ span(axis), ~axis] == 1 <=> self[ixs, ~axis] is binding
@@ -443,15 +433,13 @@ class lparray(
         lb: int,
         ub: int,
         **kwargs: Kwargs,
-    ) -> lparray[LpVariable]:
+    ) -> lparray:
 
         cat = LpBinary if lb == 0 and ub == 1 else LpInteger
 
         return self._lp_minmax(prob, name, which=which, cat=cat, lb=lb, ub=ub, **kwargs)
 
-    def lp_int_max(
-        self, prob: LpProblem, name: str, lb: int, ub: int, **kwargs: Kwargs
-    ) -> lparray[LpVariable]:
+    def lp_int_max(self, prob: LpProblem, name: str, lb: int, ub: int, **kwargs: Kwargs) -> lparray:
         """
         Returns an array corresponding to the maximum value of self along axes.
 
@@ -459,9 +447,7 @@ class lparray(
         """
         return self._lp_int_minmax(prob, name, which="max", lb=lb, ub=ub, **kwargs)
 
-    def lp_int_min(
-        self, prob: LpProblem, name: str, lb: int, ub: int, **kwargs: Kwargs
-    ) -> lparray[LpVariable]:
+    def lp_int_min(self, prob: LpProblem, name: str, lb: int, ub: int, **kwargs: Kwargs) -> lparray:
         """
         Returns an array corresponding to the maximum value of self along axes.
 
@@ -472,7 +458,7 @@ class lparray(
         """
         return self._lp_int_minmax(prob, name, which="min", lb=lb, ub=ub, **kwargs)
 
-    def lp_bin_max(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray[LpVariable]:
+    def lp_bin_max(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
         """
         Returns an array corresponding to the maximum value of self along axes.
 
@@ -483,7 +469,7 @@ class lparray(
         """
         return self._lp_int_minmax(prob, name, lb=0, ub=1, which="max", **kwargs)
 
-    def lp_bin_min(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray[LpVariable]:
+    def lp_bin_min(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
         """
         Returns an array corresponding to the minimum value of self along axes.
 
@@ -494,7 +480,7 @@ class lparray(
         """
         return self._lp_int_minmax(prob, name, lb=0, ub=1, which="min", **kwargs)
 
-    def lp_real_max(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray[LpVariable]:
+    def lp_real_max(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
         """
         Returns an array corresponding to the maximum value of self along axes.
 
@@ -505,7 +491,7 @@ class lparray(
         """
         return self._lp_minmax(prob, name, "max", LpContinuous, **kwargs)
 
-    def lp_real_min(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray[LpVariable]:
+    def lp_real_min(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
         """
         Returns an array corresponding to the minimum value of self along axes.
 
@@ -517,11 +503,11 @@ class lparray(
         return self._lp_minmax(prob, name, "min", LpContinuous, **kwargs)
 
     def lp_bin_and(
-        self: lparray[LPV],
+        self,
         prob: LpProblem,
         name: str,
-        *ins: lparray[LpVariable] | lparray[LpAffineExpression] | ndarray,
-    ) -> lparray[LPV]:
+        *ins: ndarray,
+    ) -> lparray:
         """
         Constrains the array to be the logical AND of a number of binary
         inputs.
@@ -536,11 +522,11 @@ class lparray(
         return self
 
     def lp_bin_or(
-        self: lparray[LPV],
+        self,
         prob: LpProblem,
         name: str,
-        *ins: lparray[LpVariable] | lparray[LpAffineExpression] | ndarray,
-    ) -> lparray[LPV]:
+        *ins: ndarray,
+    ) -> lparray:
         """
         Constrains the array to be the logical OR of a number of binary inputs.
 
@@ -554,13 +540,13 @@ class lparray(
         return self
 
     def lp_bin_argmax(
-        self: lparray[LpVariable],
+        self,
         prob: LpProblem,
         name: str,
         *,
         axis: int,
         bigM: Number,
-    ) -> lparray[LpVariable]:
+    ) -> lparray:
         """Return one-hot argmax indicators along `axis`.
 
         Output shape is `self.shape` with `axis` removed.
@@ -594,25 +580,25 @@ class lparray(
         return w
 
     def lp_bin_argmin(
-        self: lparray[LpVariable],
+        self,
         prob: LpProblem,
         name: str,
         *,
         axis: int,
         bigM: Number,
-    ) -> lparray[LpVariable]:
+    ) -> lparray:
         """Return one-hot argmin indicators along `axis`."""
         return (-self).lp_bin_argmax(prob, name, axis=axis, bigM=bigM)
 
     def lp_bin_topk(
-        self: lparray[LpVariable],
+        self,
         prob: LpProblem,
         name: str,
         *,
         axis: int,
         k: int,
         bigM: Number,
-    ) -> lparray[LpVariable]:
+    ) -> lparray:
         """Return binary selectors choosing exactly `k` items per slice.
 
         For each slice orthogonal to `axis`, enforces that all selected entries
@@ -652,7 +638,7 @@ class lparray(
         shape: tuple[int, ...],
         *,
         axis: int = -1,
-    ) -> lparray[LpVariable]:
+    ) -> lparray:
         """Create a binary lparray intended for one-hot constraints."""
         if axis < 0:
             axis += len(shape)
@@ -661,7 +647,7 @@ class lparray(
         return cls.create_anon(name, shape, cat=LpBinary)
 
     def constrain_one_hot(
-        self: lparray[LpVariable],
+        self,
         prob: LpProblem,
         name: str,
         *,
@@ -672,7 +658,7 @@ class lparray(
         (self.sum(axis=axis) == 1).constrain(prob, f"{name}_onehot")
 
     def all_different(
-        self: lparray[LpVariable],
+        self,
         prob: LpProblem,
         name: str,
         *,
@@ -689,11 +675,11 @@ class lparray(
         (self.sum(axis=other_axes) <= 1).constrain(prob, f"{name}_alldiff")
 
     def indicator_le(
-        self: lparray[LpAffineExpression],
+        self,
         prob: LpProblem,
         name: str,
         *,
-        b: lparray[LpVariable],
+        b: lparray,
         rhs: Number,
         bigM: Number,
     ) -> None:
@@ -701,11 +687,11 @@ class lparray(
         (self <= rhs + bigM * (1 - b)).constrain(prob, f"{name}_ind_le")
 
     def indicator_ge(
-        self: lparray[LpAffineExpression],
+        self,
         prob: LpProblem,
         name: str,
         *,
-        b: lparray[LpVariable],
+        b: lparray,
         rhs: Number,
         bigM: Number,
     ) -> None:
@@ -713,13 +699,13 @@ class lparray(
         (self >= rhs - bigM * (1 - b)).constrain(prob, f"{name}_ind_ge")
 
     def piecewise_linear_sos2(
-        self: lparray[LpAffineExpression],
+        self,
         prob: LpProblem,
         name: str,
         *,
         x: list[Number],
         y: list[Number],
-    ) -> tuple[lparray[LpVariable], lparray[LpAffineExpression]]:
+    ) -> tuple[lparray, lparray]:
         """SOS2 piecewise-linear y(x) with convex-combination lambdas.
 
         Returns:
@@ -750,7 +736,7 @@ class lparray(
         return x_var, y_var
 
     def soft_select_max(
-        self: lparray[LpVariable],
+        self,
         prob: LpProblem,
         name: str,
         *,
@@ -758,7 +744,7 @@ class lparray(
         k: int,
         penalty: Number,
         bigM: Number,
-    ) -> tuple[lparray[LpVariable], lparray[LpAffineExpression]]:
+    ) -> tuple[lparray, lparray]:
         """Select up to k maxima with slack penalty.
 
         Returns (w, slack_cost) where slack_cost is an affine expression you can
