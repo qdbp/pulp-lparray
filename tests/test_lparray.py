@@ -69,20 +69,6 @@ def test_super_sudoku() -> None:
     assert check_super_sudoku(X.values)
 
 
-def test_piecewise_linear_sos2() -> None:
-    prob = pp.LpProblem("pwl", pp.LpMinimize)
-    dummy = lparray.create(prob, "d", (), cat=pp.LpContinuous)
-    x, y = dummy.piecewise_linear_sos2(prob, "p", x=[0, 1, 2], y=[0, 1, 4])
-
-    # pick x=1 => y=1
-    c = x.item() == 1
-    c.name = "fixx"
-    prob += c
-    prob += y.item()
-    solve(prob)
-    assert abs(y.values.item() - 1) < 1e-6
-
-
 def test_logistics_demo_model() -> None:
     prob, vars_ = build_demo_model()
     solve(prob)
@@ -193,3 +179,19 @@ def test_abs_and_logical_clip() -> None:
         assert_allclose(m.values, np.maximum(-vals, 0), atol=1e-9)
         assert_allclose(magnitude.values, np.abs(vals), atol=1e-9)
         assert_allclose(nonzero.values, vals != 0)
+
+
+def test_interp() -> None:
+    prob = LpProblem()
+    rng = np.random.default_rng(3)
+    xs = rng.uniform(0, 10, size=7)
+    x = pinned(prob, xs)
+    xp, fp = [0, 2, 5, 10], [0, 4, 1, 3]  # nonconvex, so only adjacency pins the weights
+    shared = x.lp_interp(prob, "shared", xp=xp, fp=fp)
+    xps = np.sort(rng.uniform(0, 10, size=(7, 4)), axis=1)  # breakpoints for each element
+    xps[:, [0, -1]] = 0, 10
+    fps = rng.uniform(0, 5, size=(7, 4))
+    each = x.lp_interp(prob, "each", xp=xps, fp=fps)
+    for _ in adversaries(prob, shared, each):
+        assert_allclose(shared.values, np.interp(xs, xp, fp), atol=1e-6)
+        assert_allclose(each.values, list(map(np.interp, xs, xps, fps)), atol=1e-6)

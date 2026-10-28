@@ -75,8 +75,7 @@ facilities partitioned into regions, and we want to open *exactly K per region*.
 We also want convex, piecewise-linear operating cost as a function of facility
 throughput.
 
-The whole thing is a few array ops and a small loop over facilities for the
-piecewise costs:
+The whole thing is a few array ops:
 
 ```python
 import numpy as np
@@ -128,17 +127,9 @@ throughput = flow.sum(axis=(1, 2))
 for r in range(R):
     (open_[facility_region == r].sum() == K).constrain(prob, f"region{r}_k")
 
-op_cost = lparray.create(prob, "op_cost", (F,), lowBound=0, upBound=None, cat=LpContinuous)
-for f in range(F):
-    dummy = lparray.create(prob, f"pwl_d{f}", (), cat=LpContinuous)
-    x, y = dummy.piecewise_linear_sos2(
-        prob,
-        f"pwl{f}",
-        x=[0, 5, cap[f]],
-        y=[0, 5, 5 + 3 * (cap[f] - 5)],
-    )
-    prob += x.item() == throughput[f]
-    prob += op_cost[f] == y.item()
+xp = np.stack([np.zeros(F), np.full(F, 5.0), cap], axis=-1)
+fp = np.stack([np.zeros(F), np.full(F, 5.0), 5 + 3 * (cap - 5)], axis=-1)
+op_cost = throughput.lp_interp(prob, "op_cost", xp=xp, fp=fp)
 
 total_ship = (flow * ship_cost[:, :, None]).sum().item()
 total_open = (open_ * open_cost).sum().item()

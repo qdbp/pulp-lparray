@@ -10,7 +10,6 @@ from pulp import (
     LpAffineExpression,
     LpBinary,
     LpConstraint,
-    LpContinuous,
     LpProblem,
     LpVariable,
     lpSum,
@@ -242,44 +241,25 @@ class lparray(ndarray):
         (gap <= bigM * w).constrain(prob, f"{name}_out")
         return w
 
-    def piecewise_linear_sos2(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        x: list[Number],
-        y: list[Number],
-    ) -> tuple[lparray, lparray]:
-        """SOS2 piecewise-linear y(x) with convex-combination lambdas.
+    def lp_interp(self, prob: LpProblem, name: str, *, xp: ArrayLike, fp: ArrayLike) -> lparray:
+        """`np.interp(self, xp, fp)`, constraining self to `[xp[..., 0], xp[..., -1]]`.
 
-        Returns:
-            (x_var, y_var)
-        """
-        if len(x) != len(y) or len(x) < 2:
-            raise ValueError("x and y must have same length >= 2")
-
-        lam = lparray.create(
-            prob, f"{name}_lam", (len(x),), lowBound=0, upBound=1, cat=LpContinuous
-        )
-        (lam.sum() == 1).constrain(prob, f"{name}_lam_sum")
-
-        # Adjacent-only activation (classic SOS2 encoding).
-        z = lparray.create(prob, f"{name}_z", (len(x) - 1,), lowBound=0, upBound=1, cat=LpBinary)
-        (z.sum() == 1).constrain(prob, f"{name}_z_sum")
-        for i in range(len(x)):
-            if i == 0:
-                prob += lam[i] <= z[0]
-            elif i == len(x) - 1:
-                prob += lam[i] <= z[-1]
-            else:
-                prob += lam[i] <= z[i - 1] + z[i]
-
-        x_var = lparray.create(prob, f"{name}_x", (), cat=LpContinuous)
-        y_var = lparray.create(prob, f"{name}_y", (), cat=LpContinuous)
-        prob += x_var.item() == lpSum(lam[i] * x[i] for i in range(len(x)))
-        prob += y_var.item() == lpSum(lam[i] * y[i] for i in range(len(y)))
-
-        return x_var, y_var
+        The breakpoints `xp` and values `fp` lie along their last axis; their leading axes
+        broadcast against self."""
+        xs, fs = np.broadcast_arrays(np.asarray(xp, dtype=float), np.asarray(fp, dtype=float))
+        if xs.ndim == 0 or xs.shape[-1] < 2 or np.any(np.diff(xs) <= 0):
+            raise ValueError("xp must increase strictly along its last axis, of length >= 2")
+        shape = np.broadcast_shapes(self.shape, xs.shape[:-1])
+        weight = lparray.create(prob, f"{name}_weight", (*shape, xs.shape[-1]), lowBound=0)
+        segment = lparray.create(prob, f"{name}_segment", (*shape, xs.shape[-1] - 1), cat=LpBinary)
+        (weight.sum(axis=-1) == 1).constrain(prob, f"{name}_weight_sum")
+        (segment.sum(axis=-1) == 1).constrain(prob, f"{name}_segment_sum")
+        # A weight may be positive only beside the chosen segment: SOS2 adjacency.
+        edge = np.zeros((*shape, 1), dtype=object)
+        flanks = np.concatenate([edge, segment, edge], axis=-1)
+        (weight <= flanks[..., :-1] + flanks[..., 1:]).constrain(prob, f"{name}_adjacent")
+        (self == (weight * xs).sum(axis=-1)).constrain(prob, f"{name}_x")
+        return (weight * fs).sum(axis=-1)
 
     def _extremum(
         self, prob: LpProblem, name: str, axis: Axis, bigM: float, sign: Literal[1, -1]
