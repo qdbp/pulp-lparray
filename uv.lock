@@ -7,6 +7,18 @@ exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for 
 exclude-newer-span = "PT24H"
 
 [[package]]
+name = "cbcbox"
+version = "2.935"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ff/14/ccd694ea778e4416dcfb53adbb5829ea3a490b217bf99b7a2f31a7dc80f4/cbcbox-2.935-py3-none-macosx_15_0_arm64.whl", hash = "sha256:2ab678777e99d1aafeb6a2fb30e1ac918dc97a0f8aa09a47d019d6413d8e8a59", size = 75681259, upload-time = "2026-08-17T02:08:28.297Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/85/6cf10ec73877f8aa2c3dba2ad31b4e4cb5f4decc4fa661ae5f39b4ba92b2/cbcbox-2.935-py3-none-macosx_15_0_x86_64.whl", hash = "sha256:a69aef3fd8f22070021cb2b3893d5a766a9b02457f49693f771d1209820b31f2", size = 94486147, upload-time = "2026-08-17T02:08:42.489Z" },
+    { url = "https://files.pythonhosted.org/packages/97/68/6cede3dbda0bdee4b34a0760deb11faf9b92c93598d9f6b2e3472ba87715/cbcbox-2.935-py3-none-manylinux2014_aarch64.whl", hash = "sha256:2e1d408e6ccab2f96b49a39a2673aae9dd58513544f9b5045430763806520db8", size = 154226982, upload-time = "2026-08-17T02:08:47.728Z" },
+    { url = "https://files.pythonhosted.org/packages/e7/55/e74c197d7ed84de7631947c418952a0241f72f5c4b43c3299aaf7d01ef70/cbcbox-2.935-py3-none-manylinux2014_x86_64.whl", hash = "sha256:c8489e436341aabffb6ee934ed5d1ee996fafb1bf4a9a30e03a41aff2f358e92", size = 191260547, upload-time = "2026-08-17T02:08:53.042Z" },
+    { url = "https://files.pythonhosted.org/packages/1b/f6/ce27fd2093c36bfd24c61fb1f0f9108e64d4c0f887dc2271c48b82c6060b/cbcbox-2.935-py3-none-win_amd64.whl", hash = "sha256:573cc53436fe5e905e387a114cb4ba5acd647998bac9a7b4b3f2513401415139", size = 148940133, upload-time = "2026-08-17T02:08:58.352Z" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -112,6 +124,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/dd/6e/d674f1dde91c71e2ac19e5e5cf1ee6d5845e3aefecd9c39ed9c4b0c9a696/pulp-3.3.2-py3-none-any.whl", hash = "sha256:631b166f72086971a9597f7a0233ababa99bb8d50a01cd543f7758be5a9f86c0", size = 16391742, upload-time = "2026-05-25T09:41:22.2Z" },
 ]
 
+[package.optional-dependencies]
+cbc = [
+    { name = "cbcbox" },
+]
+
 [[package]]
 name = "pulp-lparray"
 version = "1.0.20201204002401"
@@ -123,6 +140,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "pulp", extra = ["cbc"] },
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
@@ -136,6 +154,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pulp", extras = ["cbc"] },
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },

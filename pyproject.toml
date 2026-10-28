@@ -15,16 +15,16 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+  "pulp[cbc]",
   "pytest",
   "ruff",
   "ty",
 ]
 
 [tool.pytest.ini_options]
-addopts = "--durations=0 -vx tests/"
-filterwarnings = [
-  "ignore::DeprecationWarning",
-]
+testpaths = ["tests"]
+addopts = "--strict-config --strict-markers"
+filterwarnings = ["error"]
 
 [tool.hatch.build]
 include = ["pulp_lparray"]

@@ -7,6 +7,10 @@ from examples.logistics_facility_topk_pwl import build_demo_model
 from pulp_lparray import lparray
 
 
+def solve(prob: pp.LpProblem) -> None:
+    assert prob.solve(pp.COIN_CMD(msg=False)) == pp.LpStatusOptimal
+
+
 def test_super_sudoku() -> None:
     """
     A Supersudoku board is a Sudoku board with the additional requirement that
@@ -38,7 +42,7 @@ def test_super_sudoku() -> None:
     (X.sum(axis=(0, 2)) == 1).constrain(prob, "MaxOnePerCol")
     (X.sum(axis=(2, 3)) == 1).constrain(prob, "MaxOnePerBox")
     (X.sum(axis=(0, 1)) == 1).constrain(prob, "MaxOnePerDust")
-    prob.solve()
+    solve(prob)
 
     assert check_super_sudoku(X.values)
 
@@ -57,7 +61,7 @@ def test_logical_clip() -> None:
     bern = npr.default_rng().binomial(3, 0.5, size=(5, 5))
 
     prob += (X * bern).sum().item()
-    prob.solve()
+    solve(prob)
 
     assert X.values.max() > 1
     assert lclip.values.max() <= 1
@@ -79,7 +83,7 @@ def test_int_max() -> None:
 
     prob += colmax.sum().item() + rowmax.sum().item()
 
-    prob.solve()
+    solve(prob)
     assert prob.objective == 16
 
 
@@ -95,7 +99,7 @@ def test_abs() -> None:
     xabs = xp + xm
 
     prob += (wave * X).sum().item()
-    prob.solve()
+    solve(prob)
 
     assert prob.objective == N
     assert xabs.values.sum() == N
@@ -121,7 +125,7 @@ def test_logical_clip_again_because_i_forgot_i_already_had_a_test() -> None:
 
     (box_sizes @ clipped <= capacity).constrain(prob, "MaxCapacity")
     prob += (clipped * boxes_values).sum().item()
-    prob.solve()
+    solve(prob)
 
     assert np.allclose(clipped.values, [1, 1, 0, 1, 0])
 
@@ -142,7 +146,7 @@ def test_bin_and() -> None:
 
     selected.lp_bin_and(prob, "DontHitRocks", 1 - scylla, 1 - charibdis)
 
-    prob.solve()
+    solve(prob)
     assert np.allclose(selected.values, [0, 1, 0])
 
 
@@ -159,7 +163,7 @@ def test_bin_or() -> None:
     prob += (utility @ day).item()
 
     day.lp_bin_or(prob, "DontCheckHours", misery, company)
-    prob.solve()
+    solve(prob)
 
     assert prob.objective.value() == -10
 
@@ -176,7 +180,7 @@ def test_argmax() -> None:
         prob += c
 
     w = X.lp_bin_argmax(prob, "amax", axis=0, bigM=100)
-    prob.solve()
+    solve(prob)
 
     chosen = int(np.argmax(w.values))
     assert chosen == int(np.argmax(vals))
@@ -193,7 +197,7 @@ def test_topk() -> None:
         prob += c
 
     w = X.lp_bin_topk(prob, "tk", axis=0, k=2, bigM=100)
-    prob.solve()
+    solve(prob)
 
     picked = set(np.where(w.values > 0.5)[0].tolist())
     assert picked == {2, 4}
@@ -209,15 +213,13 @@ def test_piecewise_linear_sos2() -> None:
     c.name = "fixx"
     prob += c
     prob += y.item()
-    prob.solve()
+    solve(prob)
     assert abs(y.values.item() - 1) < 1e-6
 
 
 def test_logistics_demo_model() -> None:
     prob, vars_ = build_demo_model()
-    prob.solve()
-
-    assert pp.LpStatus[prob.status] == "Optimal"
+    solve(prob)
 
     open_ = vars_["open"].values
     assert open_.sum() == 4
