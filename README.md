@@ -2,6 +2,8 @@
 
 *PuLP x NumPy, a match made in heaven.*
 
+Requires PuLP 4, which ships no solver: `pip install "pulp[cbc]"` installs CBC.
+
 ## Examples
 
 I assume a familiarity with [PuLP](https://github.com/coin-or/PuLP).

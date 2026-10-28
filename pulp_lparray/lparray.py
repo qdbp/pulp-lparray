@@ -48,7 +48,7 @@ class lparray(ndarray):
 
     All of:
         lparray {<=, ==, >=} {lparray, LpVariable}
-    Will return an lparray of LpConstraints, with expected semantics.
+    Will return an lparray of constraints: LpAffineExpressions with a sense.
 
     All of:
         lparray {+, -, *, /} {Real, ndarray[Real]}
@@ -56,8 +56,8 @@ class lparray(ndarray):
         lparray {+, -} {lparray, LpVariable}
     Will return an lparray of LpAffineExpression with the expected semantics.
 
-    LpConstraint-type lparrays support the `constrain` method, which will
-    bind the constraints to an LpProblem.
+    Constraint lparrays support the `constrain` method, which adds the
+    constraints to an LpProblem and returns the LpConstraints it stores.
 
     In addition, an number of more sophisticated mathematical operations are
     supported, many of which involve the creation of lparrays of auxiliary
@@ -153,23 +153,14 @@ class lparray(ndarray):
         """The solved value of each element."""
         return np.fromiter(map(value, self.flat), np.float64, self.size).reshape(self.shape)
 
-    def constrain(self, prob: LpProblem, name: str) -> None:
-        """
-        Applies the constraints contained in self to the problem.
-
-        Preconditions:
-            all entries of self are `LpConstraints`.
-
-        Arguments:
-            prob: `LpProblem` which to apply constraints to.
-            name: base name to use for the applied constraints.
-        """
-        if not isinstance(prob, LpProblem):
-            raise TypeError(f"Trying to constrain a {type(prob)}. Did you pass prob?")
+    def constrain(self, prob: LpProblem, name: str) -> lparray:
+        """Add each constraint to `prob` as `name(i,j,…)`; return the stored constraints."""
+        stored = np.empty(self.shape, dtype=object)
         for ix in np.ndindex(self.shape):
-            if not isinstance(c := self[ix], LpConstraint):
+            if not isinstance(c := self[ix], LpAffineExpression):
                 raise TypeError(f"{_subscript(name, ix)}: {c!r} is not a constraint")
-            prob.addConstraint(c, _subscript(name, ix))
+            stored[ix] = prob.addConstraint(c, _subscript(name, ix))
+        return stored.view(lparray)
 
     def abs_decompose(self, prob: LpProblem, name: str, *, bigM: float) -> tuple[lparray, lparray]:
         """The positive and negative parts `(p, m)` of self: `p - m == self`, `p, m >= 0`,

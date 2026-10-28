@@ -80,10 +80,8 @@ def build_demo_model() -> tuple[pp.LpProblem, dict[str, lparray]]:
 
 def main() -> None:
     prob, vars_ = build_demo_model()
-    prob.solve()
-
-    status = pp.LpStatus[prob.status]
-    objective = prob.objective.value()
+    status = prob.solve().status
+    objective = pp.value(prob.objective)
     open_ = vars_["open"].values
     throughput = vars_["throughput"].values
 

@@ -12,7 +12,7 @@ from pulp_lparray import lparray
 
 
 def solve(prob: pp.LpProblem) -> None:
-    assert prob.solve(pp.COIN_CMD(msg=False)) == pp.LpStatusOptimal
+    assert prob.solve(pp.COIN_CMD(msg=False)).has_solution
 
 
 def pinned(prob: LpProblem, values: ArrayLike) -> lparray:
@@ -226,6 +226,8 @@ def test_pulp_scalar_operands() -> None:
         (x <= v, X - V),
         (x >= e, X - E),
         (x == y, X - Y),
+        (v <= x, X - V),
+        (e <= x, X - E),
     ]:
         assert isinstance(got, lparray)
         assert_allclose(got.values, want)
