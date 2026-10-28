@@ -23,7 +23,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-config --strict-markers"
+addopts = "--import-mode=importlib --strict-config --strict-markers"
 filterwarnings = ["error"]
 
 [tool.hatch.build]
@@ -53,7 +53,7 @@ quote-style = "preserve"
 allow-star-arg-any = true # forwarding NumPy's dynamically typed dispatch arguments
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+"tests/**" = ["INP001", "S101"]
 
 [tool.ty.terminal]
 error-on-warning = true

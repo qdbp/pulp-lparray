@@ -1,18 +1,18 @@
+import re
 from collections.abc import Iterator
+from pathlib import Path
 
 import numpy as np
-import pulp as pp
 import pytest
 from numpy.testing import assert_allclose
 from numpy.typing import ArrayLike
-from pulp import LpBinary, LpProblem, lpSum
+from pulp import COIN_CMD, LpBinary, LpProblem, lpSum
 
-from examples.logistics_facility_topk_pwl import build_demo_model
 from pulp_lparray import lparray
 
 
-def solve(prob: pp.LpProblem) -> None:
-    assert prob.solve(pp.COIN_CMD(msg=False)).has_solution
+def solve(prob: LpProblem) -> None:
+    assert prob.solve(COIN_CMD(msg=False)).has_solution
 
 
 def pinned(prob: LpProblem, values: ArrayLike) -> lparray:
@@ -31,65 +31,6 @@ def adversaries(prob: LpProblem, *outputs: lparray) -> Iterator[None]:
         prob.setObjective(sign * push)
         solve(prob)
         yield
-
-
-def test_super_sudoku() -> None:
-    """
-    A Supersudoku board is a Sudoku board with the additional requirement that
-    no single digit can be found at the same coordinates in two boxes.
-    """
-
-    def check_super_sudoku(arr: np.ndarray) -> bool:
-        all_digits = frozenset([1, 2, 3, 4, 5, 6, 7, 8, 9])
-        flat = arr.argmax(axis=-1) + 1
-
-        for col in range(9):
-            assert set(flat[:, col // 3, :, col % 3].ravel()) == all_digits
-
-        for row in range(9):
-            assert set(flat[row // 3, :, row % 3, :].ravel()) == all_digits
-
-        for box in range(9):
-            assert set(flat[box // 3, box % 3, :, :].ravel()) == all_digits
-
-        for xy in range(9):
-            assert set(flat[:, :, xy // 3, xy % 3].ravel()) == all_digits
-
-        return True
-
-    prob = pp.LpProblem("SuperSudoku", pp.LpMinimize)
-    X = lparray.create(prob, "Board", (3, 3, 3, 3, 9), cat=pp.LpBinary)
-    (X.sum(axis=-1) == 1).constrain(prob, "OneDigitPerCell")
-    (X.sum(axis=(1, 3)) == 1).constrain(prob, "MaxOnePerRow")
-    (X.sum(axis=(0, 2)) == 1).constrain(prob, "MaxOnePerCol")
-    (X.sum(axis=(2, 3)) == 1).constrain(prob, "MaxOnePerBox")
-    (X.sum(axis=(0, 1)) == 1).constrain(prob, "MaxOnePerDust")
-    solve(prob)
-
-    assert check_super_sudoku(X.values)
-
-
-def test_logistics_demo_model() -> None:
-    prob, vars_ = build_demo_model()
-    solve(prob)
-
-    open_ = vars_["open"].values
-    assert open_.sum() == 4
-    assert open_[:3].sum() == 2
-    assert open_[3:].sum() == 2
-
-    flow = vars_["flow"].values
-    demand = np.array(
-        [
-            [4, 2, 1],
-            [0, 3, 2],
-            [1, 1, 0],
-            [3, 0, 1],
-            [2, 2, 2],
-        ],
-        dtype=float,
-    )
-    assert np.allclose(flow.sum(axis=0), demand)
 
 
 def test_linear_algebra() -> None:
@@ -233,3 +174,10 @@ def test_pulp_scalar_operands() -> None:
         assert_allclose(got.values, want)
     (x == y).constrain(prob, "eq")
     (x.sum() <= e).constrain(prob, "total")
+
+
+def test_readme() -> None:
+    readme = (Path(__file__).parents[1] / "README.md").read_text()
+    namespace: dict[str, object] = {}
+    for block in re.findall(r"^```python\n(.*?)^```", readme, re.DOTALL | re.MULTILINE):
+        exec(block, namespace)  # noqa: S102 (the README's own examples)
