@@ -77,9 +77,9 @@ def build_demo_model() -> tuple[pp.LpProblem, dict[str, lparray]]:
 
     # Shipping cost.
     ship_cost_3 = ship_cost[:, :, None]
-    total_ship = (flow * ship_cost_3).sumit()
-    total_open = (open_ * open_cost).sumit()
-    total_op = op_cost.sumit()
+    total_ship = (flow * ship_cost_3).sum().item()
+    total_open = (open_ * open_cost).sum().item()
+    total_op = op_cost.sum().item()
     prob += total_ship + total_open + total_op
 
     return prob, {

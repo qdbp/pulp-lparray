@@ -64,7 +64,7 @@ loss = (
     # rescale by inverse composition to punish relative deviations equally
     ((alloc - target_alloc) * (1 / target))
     .abs(prob, "Loss", bigM=1_000_000)
-    .sumit()
+    .sum().item()
 )
 prob += loss
 ```
@@ -141,9 +141,9 @@ for f in range(F):
     prob += x.item() == throughput[f]
     prob += op_cost[f] == y.item()
 
-total_ship = (flow * ship_cost[:, :, None]).sumit()
-total_open = (open_ * open_cost).sumit()
-total_op = op_cost.sumit()
+total_ship = (flow * ship_cost[:, :, None]).sum().item()
+total_open = (open_ * open_cost).sum().item()
+total_op = op_cost.sum().item()
 prob += total_ship + total_open + total_op
 
 prob.solve()

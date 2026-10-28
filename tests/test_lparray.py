@@ -57,7 +57,7 @@ def test_logical_clip() -> None:
     # dodging these
     bern = npr.default_rng().binomial(3, 0.5, size=(5, 5))
 
-    prob += (X * bern).sumit()
+    prob += (X * bern).sum().item()
     prob.solve()
 
     assert X.values.max() > 1
@@ -78,7 +78,7 @@ def test_int_max() -> None:
     colmax = X.lp_bin_max(prob, "colmax", axis=0)
     rowmax = X.lp_bin_max(prob, "rowmax", axis=1)
 
-    prob += colmax.sumit() + rowmax.sumit()
+    prob += colmax.sum().item() + rowmax.sum().item()
 
     prob.solve()
     assert prob.objective == 16
@@ -95,7 +95,7 @@ def test_abs() -> None:
     xp, xm = X.abs_decompose(prob, "abs")
     xabs = xp + xm
 
-    prob += (wave * X).sumit()
+    prob += (wave * X).sum().item()
     prob.solve()
 
     assert prob.objective == N
@@ -121,7 +121,7 @@ def test_logical_clip_again_because_i_forgot_i_already_had_a_test() -> None:
     clipped = taken.logical_clip(prob, "is_taken")
 
     (box_sizes @ clipped <= capacity).constrain(prob, "MaxCapacity")
-    prob += (clipped * boxes_values).sumit()
+    prob += (clipped * boxes_values).sum().item()
     prob.solve()
 
     assert np.allclose(clipped.values, [1, 1, 0, 1, 0])
@@ -202,37 +202,6 @@ def test_topk() -> None:
 
     picked = set(np.where(w.values > 0.5)[0].tolist())
     assert picked == {2, 4}
-
-
-def test_one_hot_and_all_different() -> None:
-    prob = pp.LpProblem("ohad", pp.LpMaximize)
-
-    # 3 positions choose among 4 values, all-different.
-    X = lparray.one_hot("x", (3, 4), axis=1)
-    X.constrain_one_hot(prob, "onehot", axis=1)
-    X.all_different(prob, "ad", axis=1)
-
-    # Force a specific assignment: values 0,2,3.
-    for i, j in enumerate([0, 2, 3]):
-        c = X[i, j] == 1
-        c.name = f"fix{i}"
-        prob += c
-
-    prob.solve()
-    assert np.allclose(X.values.sum(axis=1), 1)
-    assert np.all(X.values.sum(axis=0) <= 1)
-
-
-def test_indicator_le() -> None:
-    prob = pp.LpProblem("ind", pp.LpMaximize)
-    x = lparray.create_anon("x", (), cat=pp.LpInteger, lowBound=0, upBound=10)
-    b = lparray.create_anon("b", (), cat=pp.LpBinary)
-
-    # b=1 => x <= 2 ; objective maximizes x so will set b=0.
-    x.indicator_le(prob, "ind", b=b, rhs=2, bigM=100)
-    prob += x.item()
-    prob.solve()
-    assert x.values.item() == 10
 
 
 def test_piecewise_linear_sos2() -> None:

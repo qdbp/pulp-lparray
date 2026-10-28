@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Collection, Iterable
+from collections.abc import Collection
 from typing import Any, Literal, NoReturn, Protocol
 
 import numpy as np
@@ -25,10 +25,6 @@ class HasShape(Protocol):
 
 
 type Kwargs = dict[str, Any]
-
-
-def count_out(it: Iterable[Any]) -> list[int]:
-    return [ix for ix, _ in enumerate(it)]
 
 
 # noinspection PyPep8Naming
@@ -236,26 +232,6 @@ class lparray(ndarray):
         xp, xm = self.abs_decompose(prob, name, **kwargs)
         return xp + xm
 
-    def abs_clip(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        bigM: Number,
-        lowBound: Number | None = None,
-        upBound: Number | None = None,
-        cat: LpVarType = "Continuous",
-    ) -> lparray:
-        xp, xm = self.abs_decompose(
-            prob,
-            name,
-            bigM=bigM,
-            lowBound=lowBound,
-            upBound=upBound,
-            cat=cat,
-        )
-        return xp + xm
-
     def logical_clip(self, prob: LpProblem, name: str, bigM: Number = 1000) -> lparray:
         """
         Assumes self is integer >= 0.
@@ -272,13 +248,6 @@ class lparray(ndarray):
         (self <= bigM * z).constrain(prob, f"{name}_ub")
 
         return z
-
-    def sumit(self, *args: object, **kwargs: Kwargs) -> LpVariable:
-        """
-        Equivalent to `self.sum().item()`
-        """
-        out = self.sum(*args, **kwargs)
-        return out.item()
 
     def _lp_minmax(
         self,
@@ -571,73 +540,6 @@ class lparray(ndarray):
                     prob += xs[j] >= xs[kk] - bigM * (1 - ws[j] + ws[kk])
 
         return w
-
-    @classmethod
-    def one_hot(
-        cls,
-        name: str,
-        shape: tuple[int, ...],
-        *,
-        axis: int = -1,
-    ) -> lparray:
-        """Create a binary lparray intended for one-hot constraints."""
-        if axis < 0:
-            axis += len(shape)
-        if not 0 <= axis < len(shape):
-            raise ValueError("axis out of range")
-        return cls.create_anon(name, shape, cat=LpBinary)
-
-    def constrain_one_hot(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        axis: int = -1,
-    ) -> None:
-        if axis < 0:
-            axis += self.ndim
-        (self.sum(axis=axis) == 1).constrain(prob, f"{name}_onehot")
-
-    def all_different(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        axis: int = 0,
-    ) -> None:
-        """All-different for binary one-hot blocks.
-
-        Interprets `self` as a one-hot tensor where `axis` is the value axis.
-        Enforces that across all other positions, each value appears <= 1.
-        """
-        if axis < 0:
-            axis += self.ndim
-        other_axes = tuple(ax for ax in range(self.ndim) if ax != axis)
-        (self.sum(axis=other_axes) <= 1).constrain(prob, f"{name}_alldiff")
-
-    def indicator_le(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        b: lparray,
-        rhs: Number,
-        bigM: Number,
-    ) -> None:
-        """b == 1 => self <= rhs (big-M)."""
-        (self <= rhs + bigM * (1 - b)).constrain(prob, f"{name}_ind_le")
-
-    def indicator_ge(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        b: lparray,
-        rhs: Number,
-        bigM: Number,
-    ) -> None:
-        """b == 1 => self >= rhs (big-M)."""
-        (self >= rhs - bigM * (1 - b)).constrain(prob, f"{name}_ind_ge")
 
     def piecewise_linear_sos2(
         self,
