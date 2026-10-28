@@ -82,8 +82,7 @@ class lparray(ndarray):
         """
         Creates an lparray with shape from a cartesian product of index sets.
 
-        Each LpVariable in the array at index [i_0, ..., i_n] will be named
-        as "{name}_(ix_sets[0][i_0], ..., ix_sets[n][i_n])"
+        The LpVariable at index (i_0, ..., i_n) is named "{name}(i_0,...,i_n)".
 
         Args:
             name: base name for the underlying LpVariables
@@ -98,44 +97,10 @@ class lparray(ndarray):
             their integer coordinates in the array.
         """
 
-        if len(index_sets) == 0:
-            return (
-                np.array([LpVariable(name, cat=cat, upBound=upBound, lowBound=lowBound)])
-                .squeeze()
-                .view(lparray)
-            )
-
-        if len(index_sets) == 1:
-            name += "("
-
-        def recursive_worker(
-            r_name: str,
-            plane: np.ndarray,
-            r_index_sets: tuple[Iterable[Any], ...],
-        ) -> None:
-
-            if len(r_index_sets) == 1:
-                close_paren = r_name and (")" if "(" in r_name else "")
-                for ix in count_out(r_index_sets[0]):
-                    plane[ix] = LpVariable(
-                        f"{r_name}{ix}{close_paren}",
-                        cat=cat,
-                        upBound=upBound,
-                        lowBound=lowBound,
-                    )
-            else:
-                open_paren = r_name and ("(" if "(" not in r_name else "")
-                for ix in count_out(r_index_sets[0]):
-                    recursive_worker(
-                        f"{r_name}{open_paren}{ix},",
-                        plane[ix],
-                        r_index_sets[1:],
-                    )
-
-        arr = np.zeros(tuple(len(ixset) for ixset in index_sets), dtype=object)
-        recursive_worker(name, arr, index_sets)
-
-        return arr.view(lparray)
+        arr = np.empty(tuple(map(len, index_sets)), dtype=object)
+        for ix in np.ndindex(arr.shape):
+            arr[ix] = LpVariable(_subscript(name, ix), lowBound, upBound, cat)
+        return arr.view(cls)
 
     @classmethod
     def create_like(cls, name: str, like: HasShape, **kwargs: Kwargs) -> lparray:
@@ -209,32 +174,10 @@ class lparray(ndarray):
         """
         if not isinstance(prob, LpProblem):
             raise TypeError(f"Trying to constrain a {type(prob)}. Did you pass prob?")
-        if self.ndim == 0:
-            cons = self.item()
-            cons.name = name
-            prob += cons
-            return
-
-        if name and self.ndim == 1:
-            name += "("
-
-        def recursive_worker(r_prob: LpProblem, plane: np.ndarray, r_name: str) -> None:
-            if plane.ndim == 1:
-                close_paren = r_name and (")" if "(" in r_name else "")
-                for cx, const in enumerate(plane):
-                    if not isinstance(const, LpConstraint):
-                        raise TypeError(
-                            f"Attempting to constrain problem with non-constraint {const}"
-                        )
-                    const.name = r_name and f"{r_name}{cx}{close_paren}"
-                    r_prob += const
-            else:
-                open_paren = r_name and ("(" if "(" not in r_name else "")
-                for px, subplane in enumerate(plane):
-                    subname = r_name and f"{r_name}{open_paren}{px},"
-                    recursive_worker(r_prob, subplane, subname)
-
-        recursive_worker(prob, self, name)
+        for ix in np.ndindex(self.shape):
+            if not isinstance(c := self[ix], LpConstraint):
+                raise TypeError(f"{_subscript(name, ix)}: {c!r} is not a constraint")
+            prob.addConstraint(c, _subscript(name, ix))
 
     def abs_decompose(
         self,
@@ -732,3 +675,7 @@ class lparray(ndarray):
         prob += y_var.item() == lpSum(lam[i] * y[i] for i in range(len(y)))
 
         return x_var, y_var
+
+
+def _subscript(name: str, ix: tuple[int, ...]) -> str:
+    return f"{name}({','.join(map(str, ix))})" if ix else name
