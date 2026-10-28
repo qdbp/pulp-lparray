@@ -197,3 +197,37 @@ def test_interp() -> None:
     for _ in adversaries(prob, shared, each):
         assert_allclose(shared.values, np.interp(xs, xp, fp), atol=1e-6)
         assert_allclose(each.values, list(map(np.interp, xs, xps, fps)), atol=1e-6)
+
+
+def test_pulp_scalar_operands() -> None:
+    # PuLP 4 scalars set __array_priority__ = 20, and their reflected arithmetic sums an array
+    # operand into one expression; == between two variables tests identity; and expressions
+    # define __len__ and __getitem__, so NumPy reads a bare one as the sequence of its
+    # variables. Each result below must stay elementwise.
+    prob = LpProblem()
+    x, y = lparray.create(prob, "x", 3), lparray.create(prob, "y", 3)
+    v = prob.add_variable("v")
+    e = 2 * v + 1
+    filled = np.zeros(3, dtype=object).view(lparray)
+    filled[1:] = e
+    values = np.random.default_rng(4).uniform(size=7)
+    for var, val in zip([*x.flat, *y.flat, v], values, strict=True):
+        var.varValue = val
+    X, Y, V = x.values, y.values, v.varValue
+    E = 2 * V + 1
+    mask = [True, False, True]
+    for got, want in [
+        (x + v, X + V),
+        (x - e, X - E),
+        (2 * x + e, 2 * X + E),
+        (np.where(mask, x, e), np.where(mask, X, E)),
+        (np.choose([0, 1, 0], [e, x]), np.choose([0, 1, 0], [E, X])),
+        (filled, [0, E, E]),
+        (x <= v, X - V),
+        (x >= e, X - E),
+        (x == y, X - Y),
+    ]:
+        assert isinstance(got, lparray)
+        assert_allclose(got.values, want)
+    (x == y).constrain(prob, "eq")
+    (x.sum() <= e).constrain(prob, "total")

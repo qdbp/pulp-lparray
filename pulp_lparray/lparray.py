@@ -66,6 +66,10 @@ class lparray(ndarray):
 
     __hash__ = None
 
+    # PuLP 4 scalars set __array_priority__ = 20, so a lower priority makes ndarray operators
+    # defer to the scalar's reflected method, which sums the whole array into one expression.
+    __array_priority__ = math.inf
+
     if TYPE_CHECKING:
         # NumPy's stubs type these as plain or boolean ndarrays; __array_ufunc__ returns lparrays.
         def __neg__(self) -> lparray: ...
@@ -100,7 +104,7 @@ class lparray(ndarray):
         return arr.view(cls)
 
     def __array_ufunc__(self, ufunc: np.ufunc, method: str, *inputs: Any, **kwargs: Any) -> object:
-        args = [x.view(np.ndarray) if isinstance(x, lparray) else x for x in inputs]
+        args = [x.view(np.ndarray) if isinstance(x, lparray) else _shield(x) for x in inputs]
         if out := kwargs.get("out"):
             kwargs["out"] = tuple(o.view(np.ndarray) for o in out)
         match ufunc, method:
@@ -109,7 +113,10 @@ class lparray(ndarray):
             case np.matmul, "__call__":
                 result = _matmul(*args, **kwargs)
             case np.less_equal | np.greater_equal | np.equal, "__call__":
-                result = ufunc(*args, **kwargs | {"dtype": object})
+                # PuLP 4 compares two variables by identity, yielding a bool. A difference is
+                # always an expression, and comparing an expression with 0 is a constraint.
+                difference = _shield(np.subtract(*args, dtype=object))
+                result = ufunc(difference, 0, **kwargs | {"dtype": object})
             case np.add | np.subtract | np.multiply | np.true_divide | np.negative | np.positive, _:
                 result = getattr(ufunc, method)(*args, **kwargs)
             case _:
@@ -128,6 +135,8 @@ class lparray(ndarray):
         args: Iterable[Any],
         kwargs: Mapping[str, Any],
     ) -> object:
+        args = tuple(map(_shield, args))
+        kwargs = {key: _shield(arg) for key, arg in kwargs.items()}
         if func is np.dot:
             return _wrap(_dot(*args, **kwargs))
         return _wrap(super().__array_function__(func, types, args, kwargs))
@@ -135,6 +144,9 @@ class lparray(ndarray):
     def dot(self, b: ArrayLike, /) -> lparray:
         """`np.dot(self, b)`, which ndarray.dot would compute without dispatching to lparray."""
         return np.dot(self, b)
+
+    def __setitem__(self, key: object, value: object, /) -> None:
+        super().__setitem__(key, _shield(value))
 
     @property
     def values(self) -> NDArray[np.float64]:
@@ -288,6 +300,21 @@ def _box(x: object) -> NDArray[np.object_]:
     return box
 
 
+def _shield(x: object) -> object:
+    """Box a PuLP 4 expression or constraint in a 0-d array, and those within lists and tuples:
+    both define __len__ and __getitem__, so NumPy would read one as the sequence of its
+    variables."""
+    match x:
+        case LpAffineExpression() | LpConstraint():
+            return _box(x)
+        case list():
+            return list(map(_shield, x))
+        case tuple():
+            return tuple(map(_shield, x))
+        case _:
+            return x
+
+
 def _wrap(x: object) -> object:
     """View the object ndarrays among a NumPy result as lparrays, and box the PuLP scalars that
     NumPy returns for 0-d results into 0-d lparrays."""
@@ -360,7 +387,7 @@ def _expand(t: lparray, axes: tuple[int, ...]) -> lparray:
 
 def _stacked(ins: tuple[ArrayLike, ...], shape: tuple[int, ...]) -> NDArray[Any]:
     """`ins` broadcast to `shape` and stacked along a new first axis."""
-    return np.stack([np.broadcast_to(x, shape, subok=True) for x in ins])
+    return np.stack([np.broadcast_to(_shield(x), shape, subok=True) for x in ins])
 
 
 def _all(prob: LpProblem, name: str, z: lparray, x: NDArray[Any], axes: tuple[int, ...]) -> None:
