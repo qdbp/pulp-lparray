@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Collection
-from typing import Any, Literal, NoReturn, Protocol
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, Protocol
 
 import numpy as np
 from numpy import ndarray
@@ -15,6 +15,9 @@ from pulp import (
     lpSum,
     value,
 )
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
 
 type LpVarType = Literal["Binary", "Integer", "Continuous"]
 type Number = int | float
@@ -144,18 +147,9 @@ class lparray(ndarray):
         return np.equal(self, other, dtype=object)
 
     @property
-    def values(self) -> np.ndarray:
-        """
-        Returns the underlying values of the PuLP variables by calling
-        `pulp.value` on each element of self.
-
-        If the problem has not been solved, all entries will be None.
-
-        Returns:
-            ndarray of the same shape as self.
-        """
-
-        return np.vectorize(value)(self).view(np.ndarray)
+    def values(self) -> NDArray[np.float64]:
+        """The solved value of each element."""
+        return np.fromiter(map(value, self.flat), np.float64, self.size).reshape(self.shape)
 
     def constrain(self, prob: LpProblem, name: str) -> None:
         """
