@@ -11,7 +11,6 @@ from pulp import (
     LpBinary,
     LpConstraint,
     LpContinuous,
-    LpInteger,
     LpProblem,
     LpVariable,
     lpSum,
@@ -242,124 +241,21 @@ class lparray(ndarray):
 
         return z
 
-    def _lp_minmax(
-        self,
-        prob: LpProblem,
-        name: str,
-        which: Literal["min", "max"],
-        cat: LpVarType,
-        *,
-        lb: Number | None = None,
-        ub: Number | None = None,
-        bigM: Number = 1000,
-        axis: int | tuple[int, ...] | None = None,
-    ) -> lparray:
-        r"""
-        Returns an lparray the min/max of the given lparray along an axis.
+    def lp_max(self, prob: LpProblem, name: str, *, axis: Axis = None, bigM: float) -> lparray:
+        """Maximum along `axis`; requires the spread of self along it to be at most bigM."""
+        return self._extremum(prob, name, axis, bigM, 1)[0]
 
-        Axis can be multi-dimensional.
+    def lp_min(self, prob: LpProblem, name: str, *, axis: Axis = None, bigM: float) -> lparray:
+        """Minimum along `axis`; requires the spread of self along it to be at most bigM."""
+        return self._extremum(prob, name, axis, bigM, -1)[0]
 
-        Args:
-            prob: the problem instance to which to apply the constraints.
-            name: base LpVariable name for the min/max output array.
-            which: "min" or "max" -- determines the operation
-            cat: LpCategory of the output lparray
-            lb: lower bound on the output array
-            ub: upper bound on the output array
-            bigM: the big M value used for auxiliary variable inequalities.
-                Should be larger than any value that can appear in self in
-                a feasible solution.
-            axis: the axes along which to take the maximum
+    def lp_argmax(self, prob: LpProblem, name: str, *, axis: Axis = None, bigM: float) -> lparray:
+        """Binary indicator, one-hot along `axis`, of an entry attaining the maximum."""
+        return self._extremum(prob, name, axis, bigM, 1)[1]
 
-        Returns:
-            lparray, indexed by self.shape \ axis
-        """
-
-        if not np.prod(self.shape):
-            raise ValueError("No variables given!")
-
-        if axis is None:
-            axis = tuple(range(self.ndim))
-        elif isinstance(axis, int):
-            axis = (axis,)
-        elif (
-            not isinstance(axis, tuple)
-            or not axis
-            or any(not isinstance(ax, int) or not self.ndim > ax >= 0 for ax in axis)
-        ):
-            raise TypeError("Axis must be a tuple of positive integers")
-
-        if cat == LpBinary:
-            lb = 0
-            ub = 1
-        elif lb is None or ub is None:
-            raise ValueError("Need to supply bounds for non-binary variables")
-
-        assert which in ("min", "max")
-
-        aux_name = f"{name}_{which}_aux"
-
-        # axes of self which the max is indexed by
-        keep_axis = tuple(ix for ix in range(self.ndim) if ix not in axis)
-
-        # array of maxes
-        target_shape = sum((self.shape[ax : ax + 1] for ax in keep_axis), ())
-        target: lparray = lparray.create(prob, name, target_shape, lowBound=lb, upBound=ub, cat=cat)
-
-        # broadcastable version for comparison with self
-        br = tuple(
-            (slice(None, None, None) if ax in keep_axis else None) for ax in range(self.ndim)
-        )
-        target_br: lparray = target[br]
-
-        # indicator variable array.
-        # w[ixs ∈ span(axis), ~axis] == 1 <=> self[ixs, ~axis] is binding
-        w = lparray.create(prob, aux_name, self.shape, lowBound=0, upBound=1, cat=LpBinary)
-        (w.sum(axis=axis) == 1).constrain(prob, f"{name}_aux_sum")
-
-        if which == "max":
-            (target_br >= self).constrain(prob, f"{name}_lt_max")
-            (target_br <= self + bigM * (1 - w)).constrain(prob, f"{name}_attains_max")
-        elif which == "min":
-            (target_br <= self).constrain(prob, f"{name}_gt_min")
-            (target_br >= self - bigM * (1 - w)).constrain(prob, f"{name}_attains_min")
-        else:
-            raise ValueError("which must be 'min' or 'max'")
-
-        return target
-
-    def _lp_int_minmax(
-        self,
-        prob: LpProblem,
-        name: str,
-        which: Literal["min", "max"],
-        lb: int,
-        ub: int,
-        **kwargs: Kwargs,
-    ) -> lparray:
-
-        cat = LpBinary if lb == 0 and ub == 1 else LpInteger
-
-        return self._lp_minmax(prob, name, which=which, cat=cat, lb=lb, ub=ub, **kwargs)
-
-    def lp_int_max(self, prob: LpProblem, name: str, lb: int, ub: int, **kwargs: Kwargs) -> lparray:
-        """
-        Returns an array corresponding to the maximum value of self along axes.
-
-        Integer variable type.
-        """
-        return self._lp_int_minmax(prob, name, which="max", lb=lb, ub=ub, **kwargs)
-
-    def lp_int_min(self, prob: LpProblem, name: str, lb: int, ub: int, **kwargs: Kwargs) -> lparray:
-        """
-        Returns an array corresponding to the maximum value of self along axes.
-
-        Integer variable type.
-
-        See Also:
-            `_lp_minmax` for arguments.
-        """
-        return self._lp_int_minmax(prob, name, which="min", lb=lb, ub=ub, **kwargs)
+    def lp_argmin(self, prob: LpProblem, name: str, *, axis: Axis = None, bigM: float) -> lparray:
+        """Binary indicator, one-hot along `axis`, of an entry attaining the minimum."""
+        return self._extremum(prob, name, axis, bigM, -1)[1]
 
     def lp_bin_max(self, prob: LpProblem, name: str, *, axis: Axis = None) -> lparray:
         """Logical OR of binary self along `axis`."""
@@ -375,28 +271,6 @@ class lparray(ndarray):
         _all(prob, name, z, self, axes)
         return z
 
-    def lp_real_max(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
-        """
-        Returns an array corresponding to the maximum value of self along axes.
-
-        Continuous variable type.
-
-        See Also:
-            `_lp_minmax` for arguments.
-        """
-        return self._lp_minmax(prob, name, "max", LpContinuous, **kwargs)
-
-    def lp_real_min(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
-        """
-        Returns an array corresponding to the minimum value of self along axes.
-
-        Continuous variable type.
-
-        See Also:
-            `_lp_minmax` for arguments.
-        """
-        return self._lp_minmax(prob, name, "min", LpContinuous, **kwargs)
-
     def lp_bin_and(self, prob: LpProblem, name: str, *ins: ArrayLike) -> Self:
         """Constrain binary self to the elementwise logical AND of `ins`; return self."""
         _all(prob, name, self, _stacked(ins, self.shape), (0,))
@@ -406,57 +280,6 @@ class lparray(ndarray):
         """Constrain binary self to the elementwise logical OR of `ins`; return self."""
         _all(prob, name, 1 - self, 1 - _stacked(ins, self.shape), (0,))
         return self
-
-    def lp_bin_argmax(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        axis: int,
-        bigM: Number,
-    ) -> lparray:
-        """Return one-hot argmax indicators along `axis`.
-
-        Output shape is `self.shape` with `axis` removed.
-        """
-        if not isinstance(axis, int) or not self.ndim > axis >= 0:
-            raise TypeError("axis must be a valid int axis")
-
-        # Indicator array, same shape as self.
-        w = lparray.create(prob, f"{name}_w", self.shape, lowBound=0, upBound=1, cat=LpBinary)
-        (w.sum(axis=axis) == 1).constrain(prob, f"{name}_onehot")
-
-        # For each slice orthogonal to `axis`, enforce that the chosen entry is
-        # maximal via pairwise big-M comparisons.
-        keep_axis = tuple(ix for ix in range(self.ndim) if ix != axis)
-        iter_shape = tuple(self.shape[ax] for ax in keep_axis)
-        for keep_ix in np.ndindex(iter_shape):
-            sl: list[int | slice] = [slice(None)] * self.ndim
-            for k, ax in enumerate(keep_axis):
-                sl[ax] = keep_ix[k]
-            slc = tuple(sl)
-            xs = self[slc]
-            ws = w[slc]
-
-            for j in range(self.shape[axis]):
-                for k in range(self.shape[axis]):
-                    if j == k:
-                        continue
-                    # If ws[j] == 1 then xs[j] >= xs[k].
-                    prob += xs[j] >= xs[k] - bigM * (1 - ws[j])
-
-        return w
-
-    def lp_bin_argmin(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        axis: int,
-        bigM: Number,
-    ) -> lparray:
-        """Return one-hot argmin indicators along `axis`."""
-        return (-self).lp_bin_argmax(prob, name, axis=axis, bigM=bigM)
 
     def lp_bin_topk(
         self,
@@ -537,6 +360,21 @@ class lparray(ndarray):
         prob += y_var.item() == lpSum(lam[i] * y[i] for i in range(len(y)))
 
         return x_var, y_var
+
+    def _extremum(
+        self, prob: LpProblem, name: str, axis: Axis, bigM: float, sign: Literal[1, -1]
+    ) -> tuple[lparray, lparray]:
+        """`(t, w)`: `sign·t = max(sign·self)` along `axis`, `w` one-hot where attained."""
+        axes, kept = self._reduction(axis)
+        if not math.prod(self.shape[d] for d in axes):
+            raise ValueError(f"no extremum of an empty slice of {self.shape} along {axes}")
+        t = lparray.create(prob, f"{name}_t", kept)
+        w = lparray.create(prob, f"{name}_w", self.shape, cat=LpBinary)
+        (w.sum(axis=axes) == 1).constrain(prob, f"{name}_one")
+        gap = sign * (_expand(t, axes) - self)
+        (gap >= 0).constrain(prob, f"{name}_bound")
+        (gap <= bigM * (1 - w)).constrain(prob, f"{name}_attain")
+        return t, w
 
     def _reduction(self, axis: Axis) -> tuple[tuple[int, ...], tuple[int, ...]]:
         """The axes reduced over and the shape left."""

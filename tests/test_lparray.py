@@ -134,24 +134,6 @@ def test_logical_clip_again_because_i_forgot_i_already_had_a_test() -> None:
     assert np.allclose(clipped.values, [1, 1, 0, 1, 0])
 
 
-def test_argmax() -> None:
-    prob = pp.LpProblem("argmax", pp.LpMaximize)
-    X = lparray.create(prob, "arr", (5,), cat=pp.LpInteger, lowBound=0, upBound=10)
-
-    # force X to take fixed values
-    vals = np.array([1, 3, 10, 4, 9])
-    for i, v in enumerate(vals):
-        c = X[i] == v
-        c.name = f"fix{i}"
-        prob += c
-
-    w = X.lp_bin_argmax(prob, "amax", axis=0, bigM=100)
-    solve(prob)
-
-    chosen = int(np.argmax(w.values))
-    assert chosen == int(np.argmax(vals))
-
-
 def test_topk() -> None:
     prob = pp.LpProblem("topk", pp.LpMaximize)
     X = lparray.create(prob, "arr", (6,), cat=pp.LpInteger, lowBound=0, upBound=10)
@@ -253,3 +235,24 @@ def test_logic() -> None:
         assert_allclose(both.values, bits[:, 0] & (1 - bits[:, 1]))
         assert_allclose(either.values, bits[:, 2] | bits[:, 3])
         assert_allclose(never.values, [0, 0])
+
+
+def test_extrema() -> None:
+    prob = LpProblem()
+    vals = np.random.default_rng(0).integers(-9, 10, size=(6, 5))
+    x = pinned(prob, vals)
+    rowmax = x.lp_max(prob, "rowmax", axis=1, bigM=18)
+    colmin = x.lp_min(prob, "colmin", axis=0, bigM=18)
+    top = x.lp_max(prob, "top", bigM=18)
+    argmax = x.lp_argmax(prob, "argmax", axis=1, bigM=18)
+    argmin = x.lp_argmin(prob, "argmin", axis=0, bigM=18)
+    for _ in adversaries(prob, rowmax, colmin, top, argmax, argmin):
+        assert_allclose(rowmax.values, vals.max(axis=1))
+        assert_allclose(colmin.values, vals.min(axis=0))
+        assert_allclose(top.values, vals.max())
+        w = argmax.values.round()
+        assert (w.sum(axis=1) == 1).all()
+        assert (vals[w == 1] == vals.max(axis=1)).all()
+        w = argmin.values.round()
+        assert (w.sum(axis=0) == 1).all()
+        assert (vals.T[w.T == 1] == vals.min(axis=0)).all()
