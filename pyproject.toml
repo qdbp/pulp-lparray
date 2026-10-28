@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pulp-lparray"
-version = "1.0.20201204002401"
+version = "2.0.0"
 description = "PuLP x NumPy"
 readme = "README.md"
 requires-python = ">=3.12"
