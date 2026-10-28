@@ -148,7 +148,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "numpy" },
+    { name = "numpy", specifier = ">=2" },
     { name = "pulp", specifier = ">=3.3.1,<4" },
 ]
 

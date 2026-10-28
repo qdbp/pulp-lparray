@@ -1,7 +1,10 @@
 import numpy as np
 import numpy.random as npr
 import pulp as pp
-from pulp import LpBinary, LpMaximize
+import pytest
+from numpy.testing import assert_allclose
+from numpy.typing import ArrayLike
+from pulp import LpBinary, LpMaximize, LpProblem
 
 from examples.logistics_facility_topk_pwl import build_demo_model
 from pulp_lparray import lparray
@@ -9,6 +12,13 @@ from pulp_lparray import lparray
 
 def solve(prob: pp.LpProblem) -> None:
     assert prob.solve(pp.COIN_CMD(msg=False)) == pp.LpStatusOptimal
+
+
+def pinned(prob: LpProblem, values: ArrayLike) -> lparray:
+    """Variables fixed to `values`, so that any formulation over them has one solution."""
+    x = lparray.create(prob, "x", np.shape(values))
+    (x == values).constrain(prob, "pin")
+    return x
 
 
 def test_super_sudoku() -> None:
@@ -238,3 +248,30 @@ def test_logistics_demo_model() -> None:
         dtype=float,
     )
     assert np.allclose(flow.sum(axis=0), demand)
+
+
+def test_linear_algebra() -> None:
+    # lparray sums and multiplies in time linear in the contracted length, where NumPy's object
+    # loops chain PuLP's +, which copies its left operand. The results must match NumPy's.
+    prob = LpProblem()
+    rng = np.random.default_rng(5)
+    a = rng.integers(-9, 10, size=(2, 3, 4))
+    m = rng.integers(-9, 10, size=(4, 5))
+    b = rng.integers(-9, 10, size=(2, 4, 5))
+    x = pinned(prob, a)
+    solve(prob)
+    for got, want in [
+        (np.add.reduce(x), np.add.reduce(a)),
+        (x.sum(), a.sum()),
+        (x.sum(axis=(0, -1), keepdims=True), a.sum(axis=(0, -1), keepdims=True)),
+        (x @ m, a @ m),
+        (m.T @ x.swapaxes(1, 2), m.T @ a.swapaxes(1, 2)),
+        (x @ m[:, 0], a @ m[:, 0]),
+        (m[:, 0] @ x[0].T, m[:, 0] @ a[0].T),
+        (np.dot(x[0], b), np.dot(a[0], b)),
+        (x[0, 0].dot(m[:, 0]), a[0, 0].dot(m[:, 0])),
+    ]:
+        assert isinstance(got, lparray)
+        assert_allclose(got.values, want)
+    with pytest.raises(ValueError, match="contract"):
+        x @ m[:3]

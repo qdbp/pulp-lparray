@@ -9,7 +9,7 @@ description = "PuLP x NumPy"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-  "numpy",
+  "numpy>=2",
   "pulp>=3.3.1,<4",
 ]
 
@@ -49,3 +49,6 @@ ignore = [
 
 [tool.ruff.format]
 quote-style = "preserve"
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true # forwarding NumPy's dynamically typed dispatch arguments

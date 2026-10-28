@@ -1,24 +1,31 @@
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, Literal, NoReturn, Self
 
 import numpy as np
 from numpy import ndarray
+from numpy.lib.array_utils import normalize_axis_tuple
 from pulp import (
+    LpAffineExpression,
     LpBinary,
     LpConstraint,
     LpContinuous,
     LpInteger,
     LpProblem,
+    LpVariable,
     lpSum,
     value,
 )
 
 if TYPE_CHECKING:
-    from numpy.typing import NDArray
+    from collections.abc import Callable, Iterable, Mapping
+
+    from numpy.typing import ArrayLike, NDArray
 
 type LpVarType = Literal["Binary", "Integer", "Continuous"]
 type Number = int | float
+type Axis = int | tuple[int, ...] | None
 
 
 type Kwargs = dict[str, Any]
@@ -78,6 +85,36 @@ class lparray(ndarray):
         for ix in np.ndindex(arr.shape):
             arr[ix] = prob.add_variable(_subscript(name, ix), lowBound, upBound, cat)
         return arr.view(cls)
+
+    def __array_ufunc__(self, ufunc: np.ufunc, method: str, *inputs: Any, **kwargs: Any) -> object:
+        args = [x.view(np.ndarray) if isinstance(x, lparray) else x for x in inputs]
+        if out := kwargs.get("out"):
+            kwargs["out"] = tuple(o.view(np.ndarray) for o in out)
+        match ufunc, method:
+            case np.add, "reduce":
+                result = _lpsum(*args, **kwargs)
+            case np.matmul, "__call__":
+                result = _matmul(*args, **kwargs)
+            case _:
+                result = getattr(ufunc, method)(*args, **kwargs)
+        if out:
+            return out[0] if len(out) == 1 else out
+        return _wrap(result)
+
+    def __array_function__(
+        self,
+        func: Callable[..., Any],
+        types: Iterable[type],
+        args: Iterable[Any],
+        kwargs: Mapping[str, Any],
+    ) -> object:
+        if func is np.dot:
+            return _wrap(_dot(*args, **kwargs))
+        return _wrap(super().__array_function__(func, types, args, kwargs))
+
+    def dot(self, b: ArrayLike, /) -> lparray:
+        """`np.dot(self, b)`, which ndarray.dot would compute without dispatching to lparray."""
+        return np.dot(self, b)
 
     def __ge__(self, other: object) -> lparray:
         return np.greater_equal(self, other, dtype=object)
@@ -525,3 +562,74 @@ class lparray(ndarray):
 
 def _subscript(name: str, ix: tuple[int, ...]) -> str:
     return f"{name}({','.join(map(str, ix))})" if ix else name
+
+
+def _box(x: object) -> NDArray[np.object_]:
+    box = np.empty((), dtype=object)
+    box[()] = x
+    return box
+
+
+def _wrap(x: object) -> object:
+    """View the object ndarrays among a NumPy result as lparrays, and box the PuLP scalars that
+    NumPy returns for 0-d results into 0-d lparrays."""
+    match x:
+        case np.ndarray(dtype=np.object_):
+            return x.view(lparray)
+        case LpAffineExpression() | LpVariable() | LpConstraint():
+            return _box(x).view(lparray)
+        case tuple():
+            return tuple(map(_wrap, x))
+        case list():
+            return list(map(_wrap, x))
+        case _:
+            return x
+
+
+def _lpsum(
+    a: NDArray[np.object_],
+    *,
+    axis: Axis = 0,
+    dtype: object = None,
+    keepdims: bool = False,
+    where: object = True,
+) -> NDArray[np.object_]:
+    """`np.add.reduce` through `lpSum`. NumPy's object reduction chains `+`, and each PuLP `+`
+    copies its left operand, so it takes time quadratic in the length reduced."""
+    if dtype not in (None, object) or where is not True:
+        raise TypeError("lparray sums take only axis and keepdims")
+    if a.ndim == 0 and axis in (0, -1):
+        axis = ()  # NumPy reduces a 0-d array along axis 0 to itself
+    axes = normalize_axis_tuple(range(a.ndim) if axis is None else axis, a.ndim)
+    kept = [d for d in range(a.ndim) if d not in axes]
+    rows = a.transpose(*kept, *axes).reshape(
+        *(a.shape[d] for d in kept), math.prod(a.shape[d] for d in axes)
+    )
+    out = np.empty(rows.shape[:-1], dtype=object)
+    for ix in np.ndindex(out.shape):
+        out[ix] = lpSum(rows[ix])
+    return np.expand_dims(out, axes) if keepdims else out
+
+
+def _matmul(a: ArrayLike, b: ArrayLike) -> NDArray[np.object_]:
+    """`a @ b` as a sum of broadcast products, in time linear in the contracted length."""
+    lhs, rhs = np.asarray(a, dtype=object), np.asarray(b, dtype=object)
+    if not lhs.ndim or not rhs.ndim or lhs.shape[-1] != rhs.shape[-2 if rhs.ndim > 1 else 0]:
+        raise ValueError(f"matmul cannot contract {lhs.shape} with {rhs.shape}")
+    products = (lhs[None] if lhs.ndim == 1 else lhs)[..., :, :, None] * (
+        rhs[:, None] if rhs.ndim == 1 else rhs
+    )[..., None, :, :]
+    promoted = (-2,) * (lhs.ndim == 1) + (-1,) * (rhs.ndim == 1)
+    return _lpsum(products, axis=-2).squeeze(axis=promoted)
+
+
+def _dot(a: ArrayLike, b: ArrayLike) -> object:
+    """`np.dot(a, b)` through `_matmul`, which agrees with it when b has at most two axes."""
+    lhs, rhs = np.asarray(a, dtype=object), np.asarray(b, dtype=object)
+    if not lhs.ndim or not rhs.ndim:
+        return np.multiply(lhs, rhs)
+    if rhs.ndim <= 2:
+        return _matmul(lhs, rhs)
+    # dot contracts the last axis of a with the second-to-last of b; b's other axes follow a's.
+    flat = np.moveaxis(rhs, -2, 0).reshape(rhs.shape[-2], -1)
+    return _matmul(lhs, flat).reshape(*lhs.shape[:-1], *rhs.shape[:-2], rhs.shape[-1])
