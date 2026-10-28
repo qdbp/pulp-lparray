@@ -7,6 +7,7 @@ name = "pulp-lparray"
 version = "2.0.0"
 description = "PuLP x NumPy"
 readme = "README.md"
+license = "MIT-0"
 requires-python = ">=3.12"
 dependencies = [
   "numpy>=2",
