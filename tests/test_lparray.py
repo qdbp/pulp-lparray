@@ -1,10 +1,12 @@
+from collections.abc import Iterator
+
 import numpy as np
 import numpy.random as npr
 import pulp as pp
 import pytest
 from numpy.testing import assert_allclose
 from numpy.typing import ArrayLike
-from pulp import LpBinary, LpMaximize, LpProblem
+from pulp import LpBinary, LpProblem
 
 from examples.logistics_facility_topk_pwl import build_demo_model
 from pulp_lparray import lparray
@@ -19,6 +21,17 @@ def pinned(prob: LpProblem, values: ArrayLike) -> lparray:
     x = lparray.create(prob, "x", np.shape(values))
     (x == values).constrain(prob, "pin")
     return x
+
+
+def adversaries(prob: LpProblem, *outputs: lparray) -> Iterator[None]:
+    """Solve under a random objective over `outputs` and then under its negation, so that an
+    output its formulation leaves free strays from its oracle."""
+    rng = np.random.default_rng(0)
+    push = sum((rng.uniform(-1, 1, o.shape) * o).sum() for o in outputs).item()
+    for sign in (1, -1):
+        prob.setObjective(sign * push)
+        solve(prob)
+        yield
 
 
 def test_super_sudoku() -> None:
@@ -78,25 +91,6 @@ def test_logical_clip() -> None:
     assert lclip.values.max() >= 0
 
 
-def test_int_max() -> None:
-    """
-    "The Rook Problem", with maxes.
-    """
-
-    prob = pp.LpProblem("int_max", pp.LpMaximize)
-    X = lparray.create(prob, "arr", (8, 8), cat=pp.LpBinary)
-    (X.sum(axis=1) == 1).constrain(prob, "colsum")
-    (X.sum(axis=0) == 1).constrain(prob, "rowsum")
-
-    colmax = X.lp_bin_max(prob, "colmax", axis=0)
-    rowmax = X.lp_bin_max(prob, "rowmax", axis=1)
-
-    prob += colmax.sum().item() + rowmax.sum().item()
-
-    solve(prob)
-    assert prob.objective == 16
-
-
 def test_abs() -> None:
 
     N = 20
@@ -138,44 +132,6 @@ def test_logical_clip_again_because_i_forgot_i_already_had_a_test() -> None:
     solve(prob)
 
     assert np.allclose(clipped.values, [1, 1, 0, 1, 0])
-
-
-def test_bin_and() -> None:
-
-    scylla = np.array([1, 0, 0])
-    charibdis = np.array([0, 0, 1])
-    strong_currents = np.array([5, 1, 5])
-
-    prob = pp.LpProblem(sense=LpMaximize)
-
-    selected = lparray.create(prob, "navigation", 3, cat=LpBinary)
-    # no sum constraint, only constraint will be the and
-
-    value = selected @ strong_currents
-    prob += value.item()
-
-    selected.lp_bin_and(prob, "DontHitRocks", 1 - scylla, 1 - charibdis)
-
-    solve(prob)
-    assert np.allclose(selected.values, [0, 1, 0])
-
-
-def test_bin_or() -> None:
-
-    misery = np.array([1, 0, 0])
-    company = np.array([0, 0, 1])
-
-    prob = pp.LpProblem(sense=LpMaximize)
-    day = lparray.create(prob, "GoToBank", 3, cat=LpBinary)
-
-    utility = np.array([-5, 0, -5])
-
-    prob += (utility @ day).item()
-
-    day.lp_bin_or(prob, "DontCheckHours", misery, company)
-    solve(prob)
-
-    assert prob.objective.value() == -10
 
 
 def test_argmax() -> None:
@@ -275,3 +231,25 @@ def test_linear_algebra() -> None:
         assert_allclose(got.values, want)
     with pytest.raises(ValueError, match="contract"):
         x @ m[:3]
+
+
+def test_logic() -> None:
+    prob = LpProblem()
+    bits = np.random.default_rng(2).integers(0, 2, size=(5, 4))
+    b = pinned(prob, bits)
+    any_ = b.lp_bin_max(prob, "any", axis=1)
+    all_ = b.lp_bin_min(prob, "all", axis=0)
+    both = lparray.create(prob, "both", 5, cat=LpBinary)
+    both.lp_bin_and(prob, "and", b[:, 0], 1 - bits[:, 1])
+    either = lparray.create(prob, "either", 5, cat=LpBinary)
+    either.lp_bin_or(prob, "or", b[:, 2], bits[:, 3])
+    # Inputs broadcast to the output's shape: broadcast only against each other, these two
+    # scalars would form one input of length 2.
+    never = lparray.create(prob, "never", 2, cat=LpBinary)
+    never.lp_bin_and(prob, "never", 0, 1)
+    for _ in adversaries(prob, any_, all_, both, either, never):
+        assert_allclose(any_.values, bits.any(axis=1))
+        assert_allclose(all_.values, bits.all(axis=0))
+        assert_allclose(both.values, bits[:, 0] & (1 - bits[:, 1]))
+        assert_allclose(either.values, bits[:, 2] | bits[:, 3])
+        assert_allclose(never.values, [0, 0])

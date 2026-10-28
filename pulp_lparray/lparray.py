@@ -347,27 +347,19 @@ class lparray(ndarray):
         """
         return self._lp_int_minmax(prob, name, which="min", lb=lb, ub=ub, **kwargs)
 
-    def lp_bin_max(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
-        """
-        Returns an array corresponding to the maximum value of self along axes.
+    def lp_bin_max(self, prob: LpProblem, name: str, *, axis: Axis = None) -> lparray:
+        """Logical OR of binary self along `axis`."""
+        axes, kept = self._reduction(axis)
+        z = lparray.create(prob, f"{name}_z", kept, lowBound=0, upBound=1)
+        _all(prob, name, 1 - z, 1 - self, axes)
+        return z
 
-        Binary variable type.
-
-        See Also:
-            `_lp_minmax` for arguments.
-        """
-        return self._lp_int_minmax(prob, name, lb=0, ub=1, which="max", **kwargs)
-
-    def lp_bin_min(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
-        """
-        Returns an array corresponding to the minimum value of self along axes.
-
-        Binary variable type.
-
-        See Also:
-            `_lp_minmax` for arguments.
-        """
-        return self._lp_int_minmax(prob, name, lb=0, ub=1, which="min", **kwargs)
+    def lp_bin_min(self, prob: LpProblem, name: str, *, axis: Axis = None) -> lparray:
+        """Logical AND of binary self along `axis`."""
+        axes, kept = self._reduction(axis)
+        z = lparray.create(prob, f"{name}_z", kept, lowBound=0, upBound=1)
+        _all(prob, name, z, self, axes)
+        return z
 
     def lp_real_max(self, prob: LpProblem, name: str, **kwargs: Kwargs) -> lparray:
         """
@@ -391,41 +383,14 @@ class lparray(ndarray):
         """
         return self._lp_minmax(prob, name, "min", LpContinuous, **kwargs)
 
-    def lp_bin_and(
-        self,
-        prob: LpProblem,
-        name: str,
-        *ins: ndarray,
-    ) -> lparray:
-        """
-        Constrains the array to be the logical AND of a number of binary
-        inputs.
-
-        Returns:
-            self
-        """
-        for ix, _in in enumerate(ins):
-            (self <= _in).constrain(prob, f"{name}_and_ub{ix}")
-        # empty and = 1
-        (self >= sum(ins, 1 - len(ins))).constrain(prob, f"{name}_and_lb")
+    def lp_bin_and(self, prob: LpProblem, name: str, *ins: ArrayLike) -> Self:
+        """Constrain binary self to the elementwise logical AND of `ins`; return self."""
+        _all(prob, name, self, _stacked(ins, self.shape), (0,))
         return self
 
-    def lp_bin_or(
-        self,
-        prob: LpProblem,
-        name: str,
-        *ins: ndarray,
-    ) -> lparray:
-        """
-        Constrains the array to be the logical OR of a number of binary inputs.
-
-        Returns:
-            self
-        """
-        for ix, _in in enumerate(ins):
-            (self >= _in).constrain(prob, f"{name}_or_lb{ix}")
-        # empty or = 0
-        (self <= sum(ins)).constrain(prob, f"{name}_and_ub")
+    def lp_bin_or(self, prob: LpProblem, name: str, *ins: ArrayLike) -> Self:
+        """Constrain binary self to the elementwise logical OR of `ins`; return self."""
+        _all(prob, name, 1 - self, 1 - _stacked(ins, self.shape), (0,))
         return self
 
     def lp_bin_argmax(
@@ -559,6 +524,11 @@ class lparray(ndarray):
 
         return x_var, y_var
 
+    def _reduction(self, axis: Axis) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        """The axes reduced over and the shape left."""
+        axes = normalize_axis_tuple(range(self.ndim) if axis is None else axis, self.ndim)
+        return axes, tuple(n for d, n in enumerate(self.shape) if d not in axes)
+
 
 def _subscript(name: str, ix: tuple[int, ...]) -> str:
     return f"{name}({','.join(map(str, ix))})" if ix else name
@@ -633,3 +603,20 @@ def _dot(a: ArrayLike, b: ArrayLike) -> object:
     # dot contracts the last axis of a with the second-to-last of b; b's other axes follow a's.
     flat = np.moveaxis(rhs, -2, 0).reshape(rhs.shape[-2], -1)
     return _matmul(lhs, flat).reshape(*lhs.shape[:-1], *rhs.shape[:-2], rhs.shape[-1])
+
+
+def _expand(t: lparray, axes: tuple[int, ...]) -> lparray:
+    """A reduction's result with unit axes restored, to broadcast against its operand."""
+    return np.expand_dims(t, axes).view(lparray)
+
+
+def _stacked(ins: tuple[ArrayLike, ...], shape: tuple[int, ...]) -> NDArray[Any]:
+    """`ins` broadcast to `shape` and stacked along a new first axis."""
+    return np.stack([np.broadcast_to(x, shape, subok=True) for x in ins])
+
+
+def _all(prob: LpProblem, name: str, z: lparray, x: NDArray[Any], axes: tuple[int, ...]) -> None:
+    """Constrain `0 <= z <= 1` to the logical AND of binary `x` along `axes`."""
+    n = math.prod(x.shape[d] for d in axes)
+    (_expand(z, axes) <= x).constrain(prob, f"{name}_each")
+    (z >= x.sum(axis=axes) - (n - 1)).constrain(prob, f"{name}_sum")
