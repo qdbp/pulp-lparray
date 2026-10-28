@@ -281,45 +281,19 @@ class lparray(ndarray):
         _all(prob, name, 1 - self, 1 - _stacked(ins, self.shape), (0,))
         return self
 
-    def lp_bin_topk(
-        self,
-        prob: LpProblem,
-        name: str,
-        *,
-        axis: int,
-        k: int,
-        bigM: Number,
+    def lp_topk(
+        self, prob: LpProblem, name: str, *, k: int, axis: Axis = None, bigM: float
     ) -> lparray:
-        """Return binary selectors choosing exactly `k` items per slice.
-
-        For each slice orthogonal to `axis`, enforces that all selected entries
-        are >= all unselected entries (ties permitted).
-        """
-        if not isinstance(axis, int) or not self.ndim > axis >= 0:
-            raise TypeError("axis must be a valid int axis")
-        if not isinstance(k, int) or not 0 <= k <= self.shape[axis]:
-            raise ValueError("k must be an int in [0, axis_size]")
-
-        w = lparray.create(prob, f"{name}_w", self.shape, lowBound=0, upBound=1, cat=LpBinary)
-        (w.sum(axis=axis) == k).constrain(prob, f"{name}_k")
-
-        keep_axis = tuple(ix for ix in range(self.ndim) if ix != axis)
-        iter_shape = tuple(self.shape[ax] for ax in keep_axis)
-        for keep_ix in np.ndindex(iter_shape):
-            sl: list[int | slice] = [slice(None)] * self.ndim
-            for kk, ax in enumerate(keep_axis):
-                sl[ax] = keep_ix[kk]
-            slc = tuple(sl)
-            xs = self[slc]
-            ws = w[slc]
-
-            # If j selected and k not selected => x[j] >= x[k].
-            for j in range(self.shape[axis]):
-                for kk in range(self.shape[axis]):
-                    if j == kk:
-                        continue
-                    prob += xs[j] >= xs[kk] - bigM * (1 - ws[j] + ws[kk])
-
+        """Binary indicator of `k` entries along `axis`, none smaller than an unselected one."""
+        axes, kept = self._reduction(axis)
+        if not 0 <= k <= math.prod(self.shape[d] for d in axes):
+            raise ValueError(f"{name}: cannot select {k} of {self.shape} along {axes}")
+        threshold = lparray.create(prob, f"{name}_t", kept)
+        w = lparray.create(prob, f"{name}_w", self.shape, cat=LpBinary)
+        (w.sum(axis=axes) == k).constrain(prob, f"{name}_k")
+        gap = self - _expand(threshold, axes)
+        (gap >= -bigM * (1 - w)).constrain(prob, f"{name}_in")
+        (gap <= bigM * w).constrain(prob, f"{name}_out")
         return w
 
     def piecewise_linear_sos2(

@@ -134,23 +134,6 @@ def test_logical_clip_again_because_i_forgot_i_already_had_a_test() -> None:
     assert np.allclose(clipped.values, [1, 1, 0, 1, 0])
 
 
-def test_topk() -> None:
-    prob = pp.LpProblem("topk", pp.LpMaximize)
-    X = lparray.create(prob, "arr", (6,), cat=pp.LpInteger, lowBound=0, upBound=10)
-
-    vals = np.array([1, 7, 10, 4, 9, 2])
-    for i, v in enumerate(vals):
-        c = X[i] == v
-        c.name = f"fix{i}"
-        prob += c
-
-    w = X.lp_bin_topk(prob, "tk", axis=0, k=2, bigM=100)
-    solve(prob)
-
-    picked = set(np.where(w.values > 0.5)[0].tolist())
-    assert picked == {2, 4}
-
-
 def test_piecewise_linear_sos2() -> None:
     prob = pp.LpProblem("pwl", pp.LpMinimize)
     dummy = lparray.create(prob, "d", (), cat=pp.LpContinuous)
@@ -246,7 +229,8 @@ def test_extrema() -> None:
     top = x.lp_max(prob, "top", bigM=18)
     argmax = x.lp_argmax(prob, "argmax", axis=1, bigM=18)
     argmin = x.lp_argmin(prob, "argmin", axis=0, bigM=18)
-    for _ in adversaries(prob, rowmax, colmin, top, argmax, argmin):
+    top2 = x.lp_topk(prob, "top2", k=2, axis=1, bigM=18)
+    for _ in adversaries(prob, rowmax, colmin, top, argmax, argmin, top2):
         assert_allclose(rowmax.values, vals.max(axis=1))
         assert_allclose(colmin.values, vals.min(axis=0))
         assert_allclose(top.values, vals.max())
@@ -256,3 +240,7 @@ def test_extrema() -> None:
         w = argmin.values.round()
         assert (w.sum(axis=0) == 1).all()
         assert (vals.T[w.T == 1] == vals.min(axis=0)).all()
+        w = top2.values.round()
+        assert (w.sum(axis=1) == 2).all()
+        chosen, rest = np.where(w, vals, np.inf), np.where(w, -np.inf, vals)
+        assert (chosen.min(axis=1) >= rest.max(axis=1)).all()
