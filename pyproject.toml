@@ -7,13 +7,13 @@ name = "pulp-lparray"
 version = "1.0.20201204002401"
 description = "PuLP x NumPy"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.12"
 dependencies = [
   "numpy",
   "PuLP",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
   "pytest",
   "ruff",
@@ -30,7 +30,6 @@ filterwarnings = [
 include = ["pulp_lparray"]
 
 [tool.ruff]
-target-version = "py39"
 line-length = 100
 
 [tool.ruff.lint]

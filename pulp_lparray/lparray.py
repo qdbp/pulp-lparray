@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Collection, Iterable
-from typing import Any, Literal, NoReturn, Protocol, Union
+from typing import Any, Literal, NoReturn, Protocol
 
 import numpy as np
 from numpy import ndarray
@@ -16,17 +16,15 @@ from pulp import (
     value,
 )
 
-LpComparable = Union["lparray", LpVariable, int, float]
-LpVarType = Literal["Binary", "Integer", "Continuous"]
-
-Number = Union[int, float]
+type LpVarType = Literal["Binary", "Integer", "Continuous"]
+type Number = int | float
 
 
 class HasShape(Protocol):
     shape: tuple[int, ...]
 
 
-Kwargs = dict[str, Any]
+type Kwargs = dict[str, Any]
 
 
 def count_out(it: Iterable[Any]) -> list[int]:
@@ -169,19 +167,19 @@ class lparray(ndarray):
         index_sets = tuple(list(range(d)) for d in shape)
         return cls.create(name, index_sets, **kwargs)
 
-    def __ge__(self, other: LpComparable) -> lparray:
+    def __ge__(self, other: object) -> lparray:
         return np.greater_equal(self, other, dtype=object)
 
-    def __le__(self, other: LpComparable) -> lparray:
+    def __le__(self, other: object) -> lparray:
         return np.less_equal(self, other, dtype=object)
 
-    def __lt__(self, other: LpComparable) -> NoReturn:
+    def __lt__(self, other: object) -> NoReturn:
         raise NotImplementedError("lparrays support only <=, >=, and ==")
 
-    def __gt__(self, other: LpComparable) -> NoReturn:
+    def __gt__(self, other: object) -> NoReturn:
         raise NotImplementedError("lparrays support only <=, >=, and ==")
 
-    def __eq__(self, other: LpComparable) -> lparray:
+    def __eq__(self, other: object) -> lparray:
         return np.equal(self, other, dtype=object)
 
     @property
