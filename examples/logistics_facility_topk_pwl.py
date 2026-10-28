@@ -42,8 +42,8 @@ def build_demo_model() -> tuple[pp.LpProblem, dict[str, lparray]]:
 
     prob = pp.LpProblem("facility_topk_pwl", LpMinimize)
 
-    open_ = lparray.create_anon("open", (F,), lowBound=0, upBound=1, cat=LpBinary)
-    flow = lparray.create_anon("flow", (F, C, P), lowBound=0, upBound=None, cat=LpContinuous)
+    open_ = lparray.create(prob, "open", (F,), lowBound=0, upBound=1, cat=LpBinary)
+    flow = lparray.create(prob, "flow", (F, C, P), lowBound=0, upBound=None, cat=LpContinuous)
 
     # Demand satisfaction.
     (flow.sum(axis=0) == demand).constrain(prob, "demand")
@@ -59,9 +59,9 @@ def build_demo_model() -> tuple[pp.LpProblem, dict[str, lparray]]:
 
     # Piecewise operating cost per facility as function of throughput.
     # Convex cost: cheap up to 5 units, then steep.
-    op_cost = lparray.create_anon("op_cost", (F,), lowBound=0, upBound=None, cat=LpContinuous)
+    op_cost = lparray.create(prob, "op_cost", (F,), lowBound=0, upBound=None, cat=LpContinuous)
     for f in range(F):
-        dummy = lparray.create_anon(f"pwl_d{f}", (), cat=LpContinuous)
+        dummy = lparray.create(prob, f"pwl_d{f}", (), cat=LpContinuous)
         x, y = dummy.piecewise_linear_sos2(
             prob,
             f"pwl{f}",

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Collection
-from typing import TYPE_CHECKING, Any, Literal, NoReturn, Protocol
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, Self
 
 import numpy as np
 from numpy import ndarray
@@ -11,7 +10,6 @@ from pulp import (
     LpContinuous,
     LpInteger,
     LpProblem,
-    LpVariable,
     lpSum,
     value,
 )
@@ -21,10 +19,6 @@ if TYPE_CHECKING:
 
 type LpVarType = Literal["Binary", "Integer", "Continuous"]
 type Number = int | float
-
-
-class HasShape(Protocol):
-    shape: tuple[int, ...]
 
 
 type Kwargs = dict[str, Any]
@@ -71,65 +65,19 @@ class lparray(ndarray):
     @classmethod
     def create(
         cls,
+        prob: LpProblem,
         name: str,
-        index_sets: tuple[Collection[Any], ...],
+        shape: int | tuple[int, ...],
         *,
         lowBound: Number | None = None,
         upBound: Number | None = None,
         cat: LpVarType = "Continuous",
-    ) -> lparray:
-        """
-        Creates an lparray with shape from a cartesian product of index sets.
-
-        The LpVariable at index (i_0, ..., i_n) is named "{name}(i_0,...,i_n)".
-
-        Args:
-            name: base name for the underlying LpVariables
-            index_sets: an iterable of iterables containing the dimension names
-                for the array.
-            lowBound: passed to LpVariable, uniform for array
-            upBound: passed as to LpVariable, uniform for array
-            cat: passed as to LpVariable, uniform for array
-
-        Return:
-            an lparray with the specified shape, with variables named after
-            their integer coordinates in the array.
-        """
-
-        arr = np.empty(tuple(map(len, index_sets)), dtype=object)
+    ) -> Self:
+        """Variables of `prob` named `name(i,j,…)` by their indices."""
+        arr = np.empty(shape, dtype=object)
         for ix in np.ndindex(arr.shape):
-            arr[ix] = LpVariable(_subscript(name, ix), lowBound, upBound, cat)
+            arr[ix] = prob.add_variable(_subscript(name, ix), lowBound, upBound, cat)
         return arr.view(cls)
-
-    @classmethod
-    def create_like(cls, name: str, like: HasShape, **kwargs: Kwargs) -> lparray:
-        """
-        Creates an anonymous lparray with the same shape as a passed array.
-
-        Args:
-            name: base name for the LpVariables in the array
-            like: an object supporting `.shape` whose shape will be used
-
-        Returns:
-            a new lparray
-        """
-        return cls.create_anon(name, like.shape, **kwargs)
-
-    @classmethod
-    def create_anon(cls, name: str, shape: tuple[int, ...], **kwargs: Kwargs) -> lparray:
-        """
-        Creates an lparray with a given shape and nameless index sets.
-
-        Args:
-            name: base name for the underlying LpVariables
-            shape: array shape, same as for numpy arrays
-
-        Return:
-            an lparray with the specified shape, with variables named after
-            their integer coordinates in the array.
-        """
-        index_sets = tuple(list(range(d)) for d in shape)
-        return cls.create(name, index_sets, **kwargs)
 
     def __ge__(self, other: object) -> lparray:
         return np.greater_equal(self, other, dtype=object)
@@ -197,15 +145,15 @@ class lparray(ndarray):
         """
 
         # w == 1 <=> self <= 0
-        w = lparray.create_like(f"{name}_abs_aux", self, lowBound=0, upBound=1, cat=LpBinary)
+        w = lparray.create(prob, f"{name}_abs_aux", self.shape, lowBound=0, upBound=1, cat=LpBinary)
         # binding if self >= 0
         (self <= bigM * (1 - w)).constrain(prob, f"{name}_lb")
         # binding if self <= 0
         (self >= -bigM * w).constrain(prob, f"{name}_ub")
 
         # xp is the positive half of X, xm is the negative half of X
-        xp = lparray.create_like(f"{name}_absp", self, **kwargs)
-        xm = lparray.create_like(f"{name}_absm", self, **kwargs)
+        xp = lparray.create(prob, f"{name}_absp", self.shape, **kwargs)
+        xm = lparray.create(prob, f"{name}_absm", self.shape, **kwargs)
 
         (xp >= 0).constrain(prob, f"{name}_abs_xplb")
         (xm >= 0).constrain(prob, f"{name}_abs_xmlb")
@@ -236,7 +184,7 @@ class lparray(ndarray):
         Generates self.size new variables.
         """
 
-        z = self.__class__.create(name, tuple(range(x) for x in self.shape), cat=LpBinary)
+        z = lparray.create(prob, name, self.shape, cat=LpBinary)
 
         (self >= z).constrain(prob, f"{name}_lb")
         (self <= bigM * z).constrain(prob, f"{name}_ub")
@@ -305,7 +253,7 @@ class lparray(ndarray):
 
         # array of maxes
         target_shape = sum((self.shape[ax : ax + 1] for ax in keep_axis), ())
-        target: lparray = lparray.create_anon(name, target_shape, lowBound=lb, upBound=ub, cat=cat)
+        target: lparray = lparray.create(prob, name, target_shape, lowBound=lb, upBound=ub, cat=cat)
 
         # broadcastable version for comparison with self
         br = tuple(
@@ -315,7 +263,7 @@ class lparray(ndarray):
 
         # indicator variable array.
         # w[ixs ∈ span(axis), ~axis] == 1 <=> self[ixs, ~axis] is binding
-        w = self.create_like(aux_name, self, lowBound=0, upBound=1, cat=LpBinary)
+        w = lparray.create(prob, aux_name, self.shape, lowBound=0, upBound=1, cat=LpBinary)
         (w.sum(axis=axis) == 1).constrain(prob, f"{name}_aux_sum")
 
         if which == "max":
@@ -459,7 +407,7 @@ class lparray(ndarray):
             raise TypeError("axis must be a valid int axis")
 
         # Indicator array, same shape as self.
-        w = lparray.create_like(f"{name}_w", self, lowBound=0, upBound=1, cat=LpBinary)
+        w = lparray.create(prob, f"{name}_w", self.shape, lowBound=0, upBound=1, cat=LpBinary)
         (w.sum(axis=axis) == 1).constrain(prob, f"{name}_onehot")
 
         # For each slice orthogonal to `axis`, enforce that the chosen entry is
@@ -513,7 +461,7 @@ class lparray(ndarray):
         if not isinstance(k, int) or not 0 <= k <= self.shape[axis]:
             raise ValueError("k must be an int in [0, axis_size]")
 
-        w = lparray.create_like(f"{name}_w", self, lowBound=0, upBound=1, cat=LpBinary)
+        w = lparray.create(prob, f"{name}_w", self.shape, lowBound=0, upBound=1, cat=LpBinary)
         (w.sum(axis=axis) == k).constrain(prob, f"{name}_k")
 
         keep_axis = tuple(ix for ix in range(self.ndim) if ix != axis)
@@ -551,11 +499,13 @@ class lparray(ndarray):
         if len(x) != len(y) or len(x) < 2:
             raise ValueError("x and y must have same length >= 2")
 
-        lam = lparray.create_anon(f"{name}_lam", (len(x),), lowBound=0, upBound=1, cat=LpContinuous)
+        lam = lparray.create(
+            prob, f"{name}_lam", (len(x),), lowBound=0, upBound=1, cat=LpContinuous
+        )
         (lam.sum() == 1).constrain(prob, f"{name}_lam_sum")
 
         # Adjacent-only activation (classic SOS2 encoding).
-        z = lparray.create_anon(f"{name}_z", (len(x) - 1,), lowBound=0, upBound=1, cat=LpBinary)
+        z = lparray.create(prob, f"{name}_z", (len(x) - 1,), lowBound=0, upBound=1, cat=LpBinary)
         (z.sum() == 1).constrain(prob, f"{name}_z_sum")
         for i in range(len(x)):
             if i == 0:
@@ -565,8 +515,8 @@ class lparray(ndarray):
             else:
                 prob += lam[i] <= z[i - 1] + z[i]
 
-        x_var = lparray.create_anon(f"{name}_x", (), cat=LpContinuous)
-        y_var = lparray.create_anon(f"{name}_y", (), cat=LpContinuous)
+        x_var = lparray.create(prob, f"{name}_x", (), cat=LpContinuous)
+        y_var = lparray.create(prob, f"{name}_y", (), cat=LpContinuous)
         prob += x_var.item() == lpSum(lam[i] * x[i] for i in range(len(x)))
         prob += y_var.item() == lpSum(lam[i] * y[i] for i in range(len(y)))
 

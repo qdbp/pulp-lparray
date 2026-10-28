@@ -31,9 +31,8 @@ def test_super_sudoku() -> None:
 
         return True
 
-    #                       name      R, C, r, c, n   lb ub type
-    X = lparray.create_anon("Board", (3, 3, 3, 3, 9), cat=pp.LpBinary)
     prob = pp.LpProblem("SuperSudoku", pp.LpMinimize)
+    X = lparray.create(prob, "Board", (3, 3, 3, 3, 9), cat=pp.LpBinary)
     (X.sum(axis=-1) == 1).constrain(prob, "OneDigitPerCell")
     (X.sum(axis=(1, 3)) == 1).constrain(prob, "MaxOnePerRow")
     (X.sum(axis=(0, 2)) == 1).constrain(prob, "MaxOnePerCol")
@@ -48,7 +47,7 @@ def test_super_sudoku() -> None:
 def test_logical_clip() -> None:
 
     prob = pp.LpProblem("logical_clip", pp.LpMinimize)
-    X = lparray.create_anon("arr", (5, 5), cat=pp.LpInteger, lowBound=0, upBound=5)
+    X = lparray.create(prob, "arr", (5, 5), cat=pp.LpInteger, lowBound=0, upBound=5)
     (X.sum(axis=1) >= 6).constrain(prob, "colsum")
     (X.sum(axis=0) >= 6).constrain(prob, "rowsum")
 
@@ -71,7 +70,7 @@ def test_int_max() -> None:
     """
 
     prob = pp.LpProblem("int_max", pp.LpMaximize)
-    X = lparray.create_anon("arr", (8, 8), cat=pp.LpBinary)
+    X = lparray.create(prob, "arr", (8, 8), cat=pp.LpBinary)
     (X.sum(axis=1) == 1).constrain(prob, "colsum")
     (X.sum(axis=0) == 1).constrain(prob, "rowsum")
 
@@ -89,7 +88,7 @@ def test_abs() -> None:
     N = 20
 
     prob = pp.LpProblem("wavechaser", pp.LpMaximize)
-    X = lparray.create_anon("arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1)
+    X = lparray.create(prob, "arr", (N,), cat=pp.LpInteger, lowBound=-1, upBound=1)
     wave = 2 * npr.default_rng().binomial(1, 0.5, size=(N,)) - 1
 
     xp, xm = X.abs_decompose(prob, "abs")
@@ -117,7 +116,7 @@ def test_logical_clip_again_because_i_forgot_i_already_had_a_test() -> None:
 
     prob = pp.LpProblem(sense=pp.LpMaximize)
 
-    taken = lparray.create_like("is_taken_base", box_sizes, cat=pp.LpInteger)
+    taken = lparray.create(prob, "is_taken_base", box_sizes.shape, cat=pp.LpInteger)
     clipped = taken.logical_clip(prob, "is_taken")
 
     (box_sizes @ clipped <= capacity).constrain(prob, "MaxCapacity")
@@ -135,7 +134,7 @@ def test_bin_and() -> None:
 
     prob = pp.LpProblem(sense=LpMaximize)
 
-    selected = lparray.create("navigation", (("left", "center", "right"),), cat=LpBinary)
+    selected = lparray.create(prob, "navigation", 3, cat=LpBinary)
     # no sum constraint, only constraint will be the and
 
     value = selected @ strong_currents
@@ -152,15 +151,11 @@ def test_bin_or() -> None:
     misery = np.array([1, 0, 0])
     company = np.array([0, 0, 1])
 
-    day = lparray.create(
-        "GoToBank",
-        (("stuck in traffic", "stay_home", "they're closed"),),
-        cat=LpBinary,
-    )
+    prob = pp.LpProblem(sense=LpMaximize)
+    day = lparray.create(prob, "GoToBank", 3, cat=LpBinary)
 
     utility = np.array([-5, 0, -5])
 
-    prob = pp.LpProblem(sense=LpMaximize)
     prob += (utility @ day).item()
 
     day.lp_bin_or(prob, "DontCheckHours", misery, company)
@@ -171,7 +166,7 @@ def test_bin_or() -> None:
 
 def test_argmax() -> None:
     prob = pp.LpProblem("argmax", pp.LpMaximize)
-    X = lparray.create_anon("arr", (5,), cat=pp.LpInteger, lowBound=0, upBound=10)
+    X = lparray.create(prob, "arr", (5,), cat=pp.LpInteger, lowBound=0, upBound=10)
 
     # force X to take fixed values
     vals = np.array([1, 3, 10, 4, 9])
@@ -189,7 +184,7 @@ def test_argmax() -> None:
 
 def test_topk() -> None:
     prob = pp.LpProblem("topk", pp.LpMaximize)
-    X = lparray.create_anon("arr", (6,), cat=pp.LpInteger, lowBound=0, upBound=10)
+    X = lparray.create(prob, "arr", (6,), cat=pp.LpInteger, lowBound=0, upBound=10)
 
     vals = np.array([1, 7, 10, 4, 9, 2])
     for i, v in enumerate(vals):
@@ -206,7 +201,7 @@ def test_topk() -> None:
 
 def test_piecewise_linear_sos2() -> None:
     prob = pp.LpProblem("pwl", pp.LpMinimize)
-    dummy = lparray.create_anon("d", (), cat=pp.LpContinuous)
+    dummy = lparray.create(prob, "d", (), cat=pp.LpContinuous)
     x, y = dummy.piecewise_linear_sos2(prob, "p", x=[0, 1, 2], y=[0, 1, 4])
 
     # pick x=1 => y=1

@@ -15,9 +15,8 @@ be distinct for all (x, y).
 ```import pulp as pp
 from lparray import lparray
 
-#                       name      R, C, r, c, n   lb ub type
-X = lparray.create_anon("Board", (3, 3, 3, 3, 9), 0, 1, pp.LpBinary)
 prob = pp.LpProblem("SuperSudoku", pp.LpMinimize)
+X = lparray.create(prob, "Board", (3, 3, 3, 3, 9), cat=pp.LpBinary)
 (X.sum(axis=-1) == 1).constrain(prob, "OneDigitPerCell")
 (X.sum(axis=(1, 3)) == 1).constrain(prob, "MaxOnePerRow")
 (X.sum(axis=(0, 2)) == 1).constrain(prob, "MaxOnePerCol")
@@ -54,7 +53,7 @@ From the wild: we want an integral portfolio allocation that mostly closely matc
 We could use a rounding heuristic to approximate this, but PuLP-LPARRAY lets us do the correct thing easily.
 
 ```
-alloc = lparray.create_anon("Alloc", shape=target.shape, cat=pulp.LpInteger)
+alloc = lparray.create(prob, "Alloc", target.shape, cat=pulp.LpInteger)
 (alloc >= 0).constrain(prob, "NonNegativePositions")
 
 cost = (alloc @ price_arr).sum()
@@ -118,8 +117,8 @@ ship_cost = np.array(
 K = 2
 prob = pp.LpProblem("facility_topk_pwl", LpMinimize)
 
-open_ = lparray.create_anon("open", (F,), lowBound=0, upBound=1, cat=LpBinary)
-flow = lparray.create_anon("flow", (F, C, P), lowBound=0, upBound=None, cat=LpContinuous)
+open_ = lparray.create(prob, "open", (F,), lowBound=0, upBound=1, cat=LpBinary)
+flow = lparray.create(prob, "flow", (F, C, P), lowBound=0, upBound=None, cat=LpContinuous)
 
 (flow.sum(axis=0) == demand).constrain(prob, "demand")
 
@@ -129,9 +128,9 @@ throughput = flow.sum(axis=(1, 2))
 for r in range(R):
     (open_[facility_region == r].sum() == K).constrain(prob, f"region{r}_k")
 
-op_cost = lparray.create_anon("op_cost", (F,), lowBound=0, upBound=None, cat=LpContinuous)
+op_cost = lparray.create(prob, "op_cost", (F,), lowBound=0, upBound=None, cat=LpContinuous)
 for f in range(F):
-    dummy = lparray.create_anon(f"pwl_d{f}", (), cat=LpContinuous)
+    dummy = lparray.create(prob, f"pwl_d{f}", (), cat=LpContinuous)
     x, y = dummy.piecewise_linear_sos2(
         prob,
         f"pwl{f}",

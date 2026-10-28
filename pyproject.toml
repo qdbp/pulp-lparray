@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
   "numpy",
-  "PuLP",
+  "pulp>=3.3.1,<4",
 ]
 
 [dependency-groups]
