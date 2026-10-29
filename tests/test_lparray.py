@@ -1,6 +1,8 @@
 import re
 from collections.abc import Iterator
+from functools import partial
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -176,8 +178,21 @@ def test_pulp_scalar_operands() -> None:
     (x.sum() <= e).constrain(prob, "total")
 
 
-def test_readme() -> None:
+def test_readme(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(np.random, "default_rng", partial(np.random.default_rng, 0))
     readme = (Path(__file__).parents[1] / "README.md").read_text()
-    namespace: dict[str, object] = {}
+    ns: dict[str, Any] = {}
+    problems = []  # PuLP 4 invalidates the variables of a freed problem
     for block in re.findall(r"^```python\n(.*?)^```", readme, re.DOTALL | re.MULTILINE):
-        exec(block, namespace)  # noqa: S102 (the README's own examples)
+        exec(block, ns)  # noqa: S102 (the README's own examples)
+        problems.append(ns["prob"])
+    # Every row, column, box and position of the board holds each digit once.
+    digits = ns["board"].values.argmax(axis=4)
+    for axes in (0, 2, 1, 3), (1, 3, 0, 2), (0, 1, 2, 3), (2, 3, 0, 1):
+        assert (np.sort(digits.transpose(axes).reshape(9, 9)) == np.arange(9)).all()
+    clean = ns["clean"]
+    assert 2 * (ns["image"].values.round() != clean).sum() < (ns["noisy"] != clean).sum()
+    assert_allclose(ns["busiest"].values, 9)
+    assert (ns["support"].values.round() == (ns["truth"] != 0)).all()
+    xp, fp = [0, 20, 120], [0, 100, 200]
+    assert_allclose(ns["operating"].values, np.interp(ns["throughput"].values, xp, fp), atol=1e-6)
